@@ -1,0 +1,361 @@
+// Admin Portal Database Schema
+// This database manages all schools, subscriptions, and admin users
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// SCHOOL MANAGEMENT
+// ============================================
+
+model School {
+  id                String   @id @default(uuid())
+  schoolCode        String   @unique // Unique identifier for school
+  name              String
+  email             String   @unique
+  phone             String
+  address           String?
+  city              String?
+  state             String?
+  country           String   @default("India")
+  pincode           String?
+
+  // Database connection info
+  databaseUrl       String   // Connection string to school's database
+  databaseName      String   @unique
+
+  // School configuration
+  academicYearStart Int      @default(4) // Month when academic year starts (1-12)
+  weekendDays       String   @default("0,6") // Comma-separated day numbers (0=Sunday, 6=Saturday)
+  timezone          String   @default("Asia/Kolkata")
+
+  // Branding
+  logo              String?  // URL to logo
+  primaryColor      String   @default("#3B82F6")
+  secondaryColor    String   @default("#10B981")
+
+  // Status
+  isActive          Boolean  @default(true)
+  deploymentStatus  SchoolDeploymentStatus @default(PROVISIONING)
+
+  // Subscription
+  subscription      Subscription?
+
+  // Metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?  // Admin user ID
+
+  // Relations
+  adminUsers        SchoolAdminAccess[]
+  auditLogs         AuditLog[]
+
+  @@index([schoolCode])
+  @@index([email])
+}
+
+enum SchoolDeploymentStatus {
+  PROVISIONING   // Database being created
+  DEPLOYING      // Application being deployed
+  ACTIVE         // School is live
+  SUSPENDED      // Temporarily suspended
+  TERMINATED     // School account closed
+  MAINTENANCE    // Under maintenance
+}
+
+// ============================================
+// SUBSCRIPTION & LICENSE MANAGEMENT
+// ============================================
+
+model Subscription {
+  id                String   @id @default(uuid())
+  school            School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolId          String   @unique
+
+  // Plan details
+  planType          SubscriptionPlan
+  billingCycle      BillingCycle
+
+  // License limits
+  maxStudents       Int      @default(500)
+  maxTeachers       Int      @default(50)
+  maxAdmins         Int      @default(5)
+
+  // Features
+  features          String[] // Array of feature flags
+
+  // Pricing
+  pricePerMonth     Float
+  currency          String   @default("INR")
+
+  // Billing
+  startDate         DateTime
+  endDate           DateTime
+  autoRenew         Boolean  @default(true)
+
+  // Status
+  status            SubscriptionStatus @default(TRIAL)
+
+  // Payment
+  lastPaymentDate   DateTime?
+  nextBillingDate   DateTime
+
+  // Metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  invoices          Invoice[]
+
+  @@index([schoolId])
+  @@index([status])
+  @@index([endDate])
+}
+
+enum SubscriptionPlan {
+  TRIAL          // 30-day trial
+  BASIC          // Up to 500 students
+  STANDARD       // Up to 2000 students
+  PREMIUM        // Up to 5000 students
+  ENTERPRISE     // Unlimited
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  EXPIRED
+  CANCELLED
+}
+
+// ============================================
+// BILLING & INVOICES
+// ============================================
+
+model Invoice {
+  id                String   @id @default(uuid())
+  invoiceNumber     String   @unique
+
+  subscription      Subscription @relation(fields: [subscriptionId], references: [id])
+  subscriptionId    String
+
+  // Amount
+  amount            Float
+  currency          String   @default("INR")
+  tax               Float    @default(0)
+  totalAmount       Float
+
+  // Period
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+
+  // Payment
+  status            InvoiceStatus @default(PENDING)
+  paymentMethod     String?
+  paymentDate       DateTime?
+  transactionId     String?
+
+  // Files
+  invoicePdfUrl     String?
+
+  // Metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  dueDate           DateTime
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([invoiceNumber])
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model AdminUser {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  password          String   // Hashed with bcrypt
+
+  // Profile
+  firstName         String
+  lastName          String
+  phone             String?
+  avatar            String?
+
+  // Role
+  role              AdminRole @default(SUPPORT_ADMIN)
+
+  // Status
+  isActive          Boolean  @default(true)
+  emailVerified     Boolean  @default(false)
+
+  // Security
+  lastLogin         DateTime?
+  lastPasswordChange DateTime @default(now())
+  mfaEnabled        Boolean  @default(false)
+  mfaSecret         String?
+
+  // Metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  schools           SchoolAdminAccess[]
+  auditLogs         AuditLog[]
+
+  @@index([email])
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  SUPPORT_ADMIN
+}
+
+// Many-to-many relation for admin access to schools
+model SchoolAdminAccess {
+  id                String   @id @default(uuid())
+
+  adminUser         AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  adminUserId       String
+
+  school            School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolId          String
+
+  // Permissions
+  canManage         Boolean  @default(false)
+  canViewOnly       Boolean  @default(true)
+
+  // Metadata
+  grantedAt         DateTime @default(now())
+  grantedBy         String?  // Admin user ID who granted access
+
+  @@unique([adminUserId, schoolId])
+  @@index([adminUserId])
+  @@index([schoolId])
+}
+
+// ============================================
+// AUDIT & LOGGING
+// ============================================
+
+model AuditLog {
+  id                String   @id @default(uuid())
+
+  // Actor
+  adminUser         AdminUser? @relation(fields: [adminUserId], references: [id])
+  adminUserId       String?
+  actorEmail        String
+
+  // Target
+  school            School?  @relation(fields: [schoolId], references: [id])
+  schoolId          String?
+
+  // Action
+  action            String   // e.g., "CREATE_SCHOOL", "UPDATE_SUBSCRIPTION"
+  entityType        String   // e.g., "School", "Subscription"
+  entityId          String?
+
+  // Details
+  description       String
+  metadata          Json?    // Additional data
+
+  // Context
+  ipAddress         String?
+  userAgent         String?
+
+  // Metadata
+  createdAt         DateTime @default(now())
+
+  @@index([adminUserId])
+  @@index([schoolId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// SYSTEM CONFIGURATION
+// ============================================
+
+model SystemConfig {
+  id                String   @id @default(uuid())
+  key               String   @unique
+  value             Json
+  description       String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([key])
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id                String   @id @default(uuid())
+
+  // Target
+  targetType        NotificationTarget
+  targetEmail       String?  // For admin users
+  schoolId          String?  // For schools
+
+  // Content
+  title             String
+  message           String
+  type              NotificationType
+  priority          NotificationPriority @default(NORMAL)
+
+  // Status
+  isRead            Boolean  @default(false)
+  readAt            DateTime?
+
+  // Metadata
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  @@index([targetEmail])
+  @@index([schoolId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum NotificationTarget {
+  ADMIN_USER
+  SCHOOL
+  SYSTEM
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
+  SUCCESS
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
