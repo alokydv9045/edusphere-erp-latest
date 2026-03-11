@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, CheckCircle2, ChevronLeft, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from 'sonner';
 import Link from "next/link";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,7 @@ export default function AcademicYearsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { toast } = useToast();
+
 
     const [formData, setFormData] = useState({
         name: "",
@@ -49,15 +49,11 @@ export default function AcademicYearsPage() {
             setYears(response.years || []);
         } catch (error) {
             console.error("Failed to fetch academic years", error);
-            toast({
-                title: "Error",
-                description: "Failed to load academic years",
-                variant: "destructive",
-            });
+            toast.error('Failed to load academic years');
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    }, []);
 
     useEffect(() => {
         fetchYears();
@@ -71,19 +67,12 @@ export default function AcademicYearsPage() {
                 ...formData,
                 isCurrent: Boolean(formData.isCurrent),
             });
-            toast({
-                title: "Success",
-                description: "Academic year created successfully",
-            });
+            toast.success('Academic year created successfully');
             setIsDialogOpen(false);
             setFormData({ name: "", startDate: "", endDate: "", isCurrent: false });
             fetchYears();
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error?.response?.data?.error || "Failed to create academic year",
-                variant: "destructive",
-            });
+            toast.error(error?.response?.data?.error || 'Failed to create academic year');
         } finally {
             setIsSubmitting(false);
         }
@@ -92,17 +81,10 @@ export default function AcademicYearsPage() {
     const handleSetCurrent = async (id: string) => {
         try {
             await academicAPI.setCurrentAcademicYear(id);
-            toast({
-                title: "Success",
-                description: "Current academic year updated",
-            });
+            toast.success('Current academic year updated');
             fetchYears();
         } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to update current academic year",
-                variant: "destructive",
-            });
+            toast.error('Failed to update current academic year');
         }
     };
 

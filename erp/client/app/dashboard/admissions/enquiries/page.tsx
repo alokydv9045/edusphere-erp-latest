@@ -23,12 +23,12 @@ import {
     CheckCircle2, Clock, AlertCircle, Trash2, Loader2
 } from 'lucide-react';
 import { enquiryAPI, academicAPI } from '@/lib/api';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useSearchParams } from 'next/navigation';
 
 function EnquiryPageContent() {
-    const { toast } = useToast();
+
     const searchParams = useSearchParams();
     const [enquiries, setEnquiries] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +87,7 @@ function EnquiryPageContent() {
             setClasses(classRes.classes || []);
             setAcademicYears(yearRes.academicYears || []);
         } catch (error) {
-            toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
+            toast.error('Failed to load data');
         } finally {
             setIsLoading(false);
         }
@@ -97,7 +97,7 @@ function EnquiryPageContent() {
         try {
             const res = await enquiryAPI.create(newEnquiry);
             if (res.success) {
-                toast({ title: "Success", description: "Enquiry added successfully" });
+                toast.success('Enquiry added successfully');
                 setIsAddModalOpen(false);
                 loadInitialData();
                 setNewEnquiry({
@@ -106,7 +106,7 @@ function EnquiryPageContent() {
                 });
             }
         } catch (error) {
-            toast({ title: "Error", description: "Failed to create enquiry", variant: "destructive" });
+            toast.error('Failed to create enquiry');
         }
     };
 
@@ -114,13 +114,13 @@ function EnquiryPageContent() {
         try {
             const res = await enquiryAPI.addFollowUp(selectedEnquiry.id, followUpData);
             if (res.success) {
-                toast({ title: "Success", description: "Follow-up logged" });
+                toast.success('Follow-up logged');
                 setIsFollowUpModalOpen(false);
                 loadInitialData();
                 setFollowUpData({ remark: '', nextFollowUpDate: '' });
             }
         } catch (error) {
-            toast({ title: "Error", description: "Failed to log follow-up", variant: "destructive" });
+            toast.error('Failed to log follow-up');
         }
     };
 

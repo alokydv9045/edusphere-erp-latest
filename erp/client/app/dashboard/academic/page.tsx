@@ -23,7 +23,7 @@ import {
 import { Plus, Loader2, Edit, Trash2, BookOpen, GraduationCap, Clock, CheckCircle2, Upload, FileText } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 const selectClass =
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
@@ -38,7 +38,7 @@ export default function AcademicPage() {
   const [activeTab, setActiveTab] = useState('classes');
   const { canManageAcademics, isStudent } = usePermissions();
   const { user } = useAuth();
-  const { toast } = useToast();
+
 
   // ── Student Data State ──────────────────────────────────────────────────
   const [studentData, setStudentData] = useState<any>(null);
@@ -114,16 +114,16 @@ export default function AcademicPage() {
         }
       }
     } catch (err: any) {
-      toast({ title: 'Error', description: 'Failed to load student data', variant: 'destructive' });
+      toast.error('Failed to load student data');
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const handleTimetableUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!timetableFile || !timetableForm.classId || !timetableForm.name) {
-      toast({ title: 'Error', description: 'Please fill all fields and select a PDF', variant: 'destructive' });
+      toast.error('Please fill all fields and select a PDF');
       return;
     }
     setIsUploading(true);
@@ -137,11 +137,11 @@ export default function AcademicPage() {
 
       const { academicAPI } = await import('@/lib/api');
       await academicAPI.createTimetable(formData);
-      toast({ title: 'Success', description: 'Timetable uploaded successfully' });
+      toast.success('Timetable uploaded successfully');
       setUploadDialog(false);
       fetchTimetables();
     } catch (err) {
-      toast({ title: 'Error', description: 'Failed to upload timetable', variant: 'destructive' });
+      toast.error('Failed to upload timetable');
     } finally {
       setIsUploading(false);
     }
@@ -168,11 +168,11 @@ export default function AcademicPage() {
         setClassForm(prev => ({ ...prev, academicYearId: prev.academicYearId || currentYear.id }));
       }
     } catch {
-      toast({ title: 'Error', description: 'Failed to load academic data', variant: 'destructive' });
+      toast.error('Failed to load academic data');
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     if (isStudent && user) {
@@ -253,15 +253,15 @@ export default function AcademicPage() {
       };
       if (editingClass) {
         await academicAPI.updateClass(editingClass.id, payload);
-        toast({ title: 'Success', description: 'Class updated successfully' });
+        toast.success('Class updated successfully');
       } else {
         await academicAPI.createClass(payload);
-        toast({ title: 'Success', description: 'Class created successfully' });
+        toast.success('Class created successfully');
       }
       setClassDialog(false);
       fetchData();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to save class', variant: 'destructive' });
+      toast.error(err?.response?.data?.error || 'Failed to save class');
     } finally {
       setIsSubmitting(false);
     }
@@ -280,15 +280,15 @@ export default function AcademicPage() {
       };
       if (editingSubject) {
         await academicAPI.updateSubject(editingSubject.id, payload);
-        toast({ title: 'Success', description: 'Subject updated successfully' });
+        toast.success('Subject updated successfully');
       } else {
         await academicAPI.createSubject(payload);
-        toast({ title: 'Success', description: 'Subject created successfully' });
+        toast.success('Subject created successfully');
       }
       setSubjectDialog(false);
       fetchData();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to save subject', variant: 'destructive' });
+      toast.error(err?.response?.data?.error || 'Failed to save subject');
     } finally {
       setIsSubmitting(false);
     }
@@ -305,15 +305,15 @@ export default function AcademicPage() {
       };
       if (editingSection) {
         await academicAPI.updateSection(editingSection.id, payload);
-        toast({ title: 'Success', description: 'Section updated successfully' });
+        toast.success('Section updated successfully');
       } else {
         await academicAPI.createSection(payload);
-        toast({ title: 'Success', description: 'Section created successfully' });
+        toast.success('Section created successfully');
       }
       setSectionDialog(false);
       fetchData();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to save section', variant: 'destructive' });
+      toast.error(err?.response?.data?.error || 'Failed to save section');
     } finally {
       setIsSubmitting(false);
     }
@@ -325,12 +325,12 @@ export default function AcademicPage() {
     setIsSubmitting(true);
     try {
       await academicAPI.deleteClass(deletingClass.id);
-      toast({ title: 'Success', description: 'Class deleted successfully' });
+      toast.success('Class deleted successfully');
       setDeleteClassDialog(false);
       setDeletingClass(null);
       fetchData();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to delete class', variant: 'destructive' });
+      toast.error(err?.response?.data?.error || 'Failed to delete class');
     } finally {
       setIsSubmitting(false);
     }
@@ -341,12 +341,12 @@ export default function AcademicPage() {
     setIsSubmitting(true);
     try {
       await academicAPI.deleteSubject(deletingSubject.id);
-      toast({ title: 'Success', description: 'Subject deleted successfully' });
+      toast.success('Subject deleted successfully');
       setDeleteSubjectDialog(false);
       setDeletingSubject(null);
       fetchData();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to delete subject', variant: 'destructive' });
+      toast.error(err?.response?.data?.error || 'Failed to delete subject');
     } finally {
       setIsSubmitting(false);
     }
@@ -357,12 +357,12 @@ export default function AcademicPage() {
     setIsSubmitting(true);
     try {
       await academicAPI.deleteSection(deletingSection.id);
-      toast({ title: 'Success', description: 'Section deleted successfully' });
+      toast.success('Section deleted successfully');
       setDeleteSectionDialog(false);
       setDeletingSection(null);
       fetchData();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to delete section', variant: 'destructive' });
+      toast.error(err?.response?.data?.error || 'Failed to delete section');
     } finally {
       setIsSubmitting(false);
     }
@@ -1330,12 +1330,12 @@ export default function AcademicPage() {
           try {
             const { academicAPI } = await import('@/lib/api');
             await academicAPI.deleteTimetable(deletingTimetable.id);
-            toast({ title: 'Success', description: 'Timetable deleted successfully' });
+            toast.success('Timetable deleted successfully');
             setDeleteTimetableDialog(false);
             setDeletingTimetable(null);
             fetchTimetables();
           } catch {
-            toast({ title: 'Error', description: 'Failed to delete timetable', variant: 'destructive' });
+            toast.error('Failed to delete timetable');
           } finally {
             setIsSubmitting(false);
           }

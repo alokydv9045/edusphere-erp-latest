@@ -12,7 +12,7 @@ import {
   FileText, UserPlus, CheckCircle2, Clock, BarChart3,
   CreditCard, Search, Printer, Receipt, ArrowRight,
   Phone, Mail, Download, Upload, ClipboardList, Activity,
-  MessageSquare,
+  MessageSquare, BellRing, XCircle, Send,
 } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -61,6 +61,7 @@ export default function DashboardPage() {
   const [accountantData, setAccountantData] = useState<any>(null);
   const [studentProfile, setStudentProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [notifStats, setNotifStats] = useState<{ sentToday: number; scheduledCount: number; pendingCount: number; failedCount: number } | null>(null);
 
   const loadDashboard = async () => {
     setIsLoading(true);
@@ -90,6 +91,13 @@ export default function DashboardPage() {
       console.error('Dashboard load error', err);
     } finally {
       setIsLoading(false);
+    }
+
+    // Load notification stats (non-blocking, only for admin roles)
+    if (['SUPER_ADMIN', 'ADMIN'].includes(role)) {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'}/notifications/dashboard`, {
+        headers: { Authorization: `Bearer ${(typeof window !== 'undefined' ? localStorage.getItem('auth_token') : '') || ''}` },
+      }).then(r => r.json()).then(d => { if (d.stats) setNotifStats(d.stats); }).catch(() => {});
     }
   };
 
@@ -687,6 +695,47 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          NOTIFICATION STATS WIDGET (Admin / Super Admin)
+          ══════════════════════════════════════════════════════════════════════ */}
+      {isAdminOrPrincipal && notifStats && (
+        <Card className="border-l-4 border-l-violet-500">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <BellRing className="h-4 w-4 text-violet-600" /> Notification Overview
+              </CardTitle>
+              <CardDescription>WhatsApp notification delivery stats</CardDescription>
+            </div>
+            <Link href="/dashboard/notifications">
+              <Button variant="ghost" size="sm" className="gap-1 text-xs text-violet-600 hover:text-violet-700">
+                Manage <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-2xl font-bold text-green-600">{notifStats.sentToday}</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sent Today</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-2xl font-bold text-blue-600">{notifStats.scheduledCount}</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Scheduled</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-2xl font-bold text-orange-600">{notifStats.pendingCount}</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1"><Send className="h-3 w-3" /> Pending</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-2xl font-bold text-red-600">{notifStats.failedCount}</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1"><XCircle className="h-3 w-3" /> Failed</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════

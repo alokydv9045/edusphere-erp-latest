@@ -3,6 +3,7 @@ const { getConfigValue } = require('../utils/configHelper');
 const { DEFAULTS, ATTENDANCE_STATUS, ROLES } = require('../constants');
 const { checkGeofence } = require('../utils/geoUtils');
 const { parseQRPayload } = require('../utils/qrGenerator');
+const notifService = require('../notifications/notificationService');
 
 // Mark attendance (manual or RFID)
 const markAttendance = async (req, res) => {
@@ -59,6 +60,9 @@ const markAttendance = async (req, res) => {
       message: 'Attendance marked successfully',
       attendance,
     });
+
+    // Non-blocking: enqueue attendance notification for student's parents
+    notifService.enqueueAttendanceNotif(studentId, { status, date: attendanceDate }).catch(() => {});
   } catch (error) {
     console.error('Mark attendance error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -235,6 +239,12 @@ const handleRFIDScan = async (req, res) => {
       action: 'checkin',
       isLate,
     });
+
+    // Non-blocking: notify parent of RFID check-in
+    notifService.enqueueAttendanceNotif(rfidCard.studentId, {
+      status: isLate ? ATTENDANCE_STATUS.LATE : ATTENDANCE_STATUS.PRESENT,
+      date: today,
+    }).catch(() => {});
   } catch (error) {
     console.error('RFID scan error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -625,6 +635,13 @@ const submitSlotAttendance = async (req, res) => {
       message: `Attendance saved for ${attendanceData.length} entries`,
       count: attendanceData.length,
     });
+
+    // Non-blocking: enqueue attendance notifications for each student
+    if (slot.attendeeType === ROLES.STUDENT) {
+      for (const { entityId, status } of attendanceData) {
+        notifService.enqueueAttendanceNotif(entityId, { status, date: slot.date }).catch(() => {});
+      }
+    }
   } catch (error) {
     console.error('Submit slot attendance error:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -8,7 +8,7 @@ const { generateUserQR, parseQRPayload } = require('../utils/qrGenerator');
  * - All other users can have multiple roles
  * - ADMIN represents the Principal with full access
  */
-const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'LIBRARIAN', 'ACCOUNTANT', 'ADMISSION_MANAGER'];
+const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'LIBRARIAN', 'ACCOUNTANT', 'ADMISSION_MANAGER', 'NOTIFICATION_MANAGER'];
 
 /**
  * Validate roles for a user

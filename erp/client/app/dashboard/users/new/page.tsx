@@ -50,6 +50,12 @@ const ROLE_CONFIG = [
     description: 'Register new students and manage all admission-related data entry',
     color: 'bg-cyan-100 text-cyan-700 border-cyan-200',
   },
+  {
+    value: 'NOTIFICATION_MANAGER',
+    label: 'Notification Manager',
+    description: 'Manage WhatsApp notifications, templates, bulk messaging, and delivery logs',
+    color: 'bg-violet-100 text-violet-700 border-violet-200',
+  },
 ];
 
 export default function NewUserPage() {

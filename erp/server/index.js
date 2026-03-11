@@ -40,6 +40,7 @@ const paymentRoutes = require('./src/routes/paymentRoutes');
 const schoolConfigRoutes = require('./src/routes/schoolConfigRoutes');
 const enquiryRoutes = require('./src/routes/enquiryRoutes');
 const scannerRoutes = require('./src/routes/scannerRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
 
 // Initialize app
 const app = express();
@@ -120,6 +121,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/school-config', schoolConfigRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/scanners', scannerRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -145,4 +147,15 @@ app.listen(PORT, () => {
   console.log(`🏫 School: ${process.env.SCHOOL_NAME} (${process.env.SCHOOL_ID})`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🏥 Health check: http://localhost:${PORT}/health\n`);
+
+  // Start notification scheduler and queue worker
+  try {
+    const { startScheduler } = require('./src/notifications/notificationScheduler');
+    const { startQueueWorker } = require('./src/notifications/notificationQueue');
+    startQueueWorker();
+    startScheduler();
+    console.log('🔔 Notification scheduler & queue worker started');
+  } catch (err) {
+    console.warn('⚠️  Notification scheduler could not start (install bullmq + node-cron):', err.message);
+  }
 });
