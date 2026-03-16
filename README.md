@@ -110,8 +110,8 @@ For a deeper dive, read the full [Architecture Guide](./ARCHITECTURE.md).
 ## 🤝 Support & Documentation
 
 <div align="center">
-Developed and maintained by <b>Vivek12coder</b>.
-Made with ❤️ as part of the <b>EduSphere</b> suite.
+Developed and maintained by <b>Team Edusphere </b>.
+Made with ❤️ as part of the <b>EduSphere</b>suite.
 <br><br>
 
 [Deployment Docs](./docs/deployment/) • [Database Schema](./docs/DATABASE_SCHEMA.md) • [API Specs](./docs/api/) • [Contribute](./CONTRIBUTING.md)
