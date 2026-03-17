@@ -12,6 +12,7 @@ const {
   deleteSlot,
   submitSlotAttendance,
   submitStaffAttendance,
+  getAttendanceAnalytics,
 } = require('../controllers/attendanceController');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 
@@ -25,6 +26,7 @@ router.get('/date', getAttendanceByDate);
 router.post('/rfid-scan', handleRFIDScan);
 router.post('/bulk', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), bulkMarkAttendance);
 router.get('/report', getAttendanceReport);
+router.get('/analytics', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), getAttendanceAnalytics);
 
 // Slot routes
 router.post('/slots', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), createSlot);

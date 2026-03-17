@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Navigation, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { scannerAPI } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/auth-context';
 import { useEffect } from 'react';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+
 const SCANNER_TYPES = ['ENTRY', 'EXIT', 'CLASSROOM', 'LIBRARY', 'CANTEEN', 'EXAM_HALL', 'CUSTOM'];
 const ALL_ROLES = ['STUDENT', 'TEACHER', 'STAFF'];
 
@@ -70,19 +71,12 @@ export default function NewScannerPage() {
 
         setSaving(true);
         try {
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(`${API}/scanners`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name, location, scannerType, allowedRoles,
-                    latitude: latitude ? parseFloat(latitude) : null,
-                    longitude: longitude ? parseFloat(longitude) : null,
-                    geofenceRadius: parseInt(geofenceRadius) || 10,
-                }),
+            const data = await scannerAPI.create({
+                name, location, scannerType, allowedRoles,
+                latitude: latitude ? parseFloat(latitude) : null,
+                longitude: longitude ? parseFloat(longitude) : null,
+                geofenceRadius: parseInt(geofenceRadius) || 10,
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Failed to create scanner');
             toast.success('Scanner created successfully');
             router.push(`/dashboard/scanners/${data.scanner.id}`);
         } catch (err: unknown) {

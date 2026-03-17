@@ -1,7 +1,9 @@
 const studentService = require('../services/studentService');
+const { emitEvent } = require('../services/socketService');
 const studentRepo = require('../repositories/studentRepository');
 const asyncHandler = require('../utils/asyncHandler');
 const NotFoundError = require('../errors/NotFoundError');
+const { generateAttendanceReportPDF } = require('../utils/attendanceReportGenerator');
 
 /**
  * Get all students with filters
@@ -34,6 +36,13 @@ const createStudent = asyncHandler(async (req, res) => {
     message: 'Student created successfully',
     student,
   });
+
+  // Emit real-time event
+  emitEvent('STUDENT_CREATED', {
+    studentId: student.id,
+    name: `${student.user?.firstName || ''} ${student.user?.lastName || ''}`,
+    class: student.currentClass?.name
+  }, 'ADMIN');
 });
 
 /**
@@ -83,6 +92,13 @@ const registerStudent = asyncHandler(async (req, res) => {
     message: 'Student registered successfully',
     data: result
   });
+
+  // Emit real-time event
+  emitEvent('STUDENT_REGISTERED', {
+    studentId: result.student?.id,
+    name: `${result.student?.user?.firstName || ''} ${result.student?.user?.lastName || ''}`,
+    class: result.student?.currentClass?.name
+  }, 'ADMIN');
 });
 
 /**
@@ -133,6 +149,51 @@ const updateMeStudent = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get student attendance report in PDF
+ * Route: GET /api/students/:id/attendance/report
+ */
+const getAttendanceReport = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { startDate, endDate } = req.query;
+
+  // 1. Get student details and attendance data
+  const student = await studentService.getStudentById(id);
+  const attData = await studentService.getStudentAttendance(id, startDate, endDate);
+
+  // 2. Format data for PDF generator
+  const pdfData = {
+    student: {
+      name: `${student.user.firstName} ${student.user.lastName}`,
+      admissionNo: student.admissionNumber,
+      className: student.currentClass?.name,
+      sectionName: student.section?.name,
+    },
+    attendance: attData.attendance,
+    stats: attData.stats,
+    subjectWise: attData.subjectWise,
+    dateRange: {
+      start: startDate || 'Start',
+      end: endDate || 'Now'
+    },
+    schoolConfig: {
+      schoolName: process.env.SCHOOL_NAME || 'EduSphere ERP'
+    }
+  };
+
+  // 3. Generate PDF
+  const buffer = await generateAttendanceReportPDF(pdfData);
+
+  // 4. Send response
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename=Attendance_Report_${student.admissionNumber}.pdf`,
+    'Content-Length': buffer.length,
+  });
+
+  res.status(200).send(buffer);
+});
+
 module.exports = {
   getStudents,
   getStudent,
@@ -142,5 +203,6 @@ module.exports = {
   getStudentAttendance,
   registerStudent,
   getMeStudent,
-  updateMeStudent
+  updateMeStudent,
+  getAttendanceReport, // Export new method
 };

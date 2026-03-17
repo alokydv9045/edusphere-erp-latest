@@ -1,39 +1,36 @@
 const prisma = require('../config/database');
+const asyncHandler = require('../utils/asyncHandler');
+const logger = require('../config/logger');
 
 // Get all grade scales
-const getGradeScales = async (req, res) => {
-    try {
-        const scales = await prisma.gradeScale.findMany({
-            include: {
-                entries: { orderBy: { order: 'asc' } },
-            },
-            orderBy: { name: 'asc' },
-        });
+const getGradeScales = asyncHandler(async (req, res) => {
+    const scales = await prisma.gradeScale.findMany({
+        include: {
+            entries: { orderBy: { order: 'asc' } },
+        },
+        orderBy: { name: 'asc' },
+    });
 
-        res.json({ scales });
-    } catch (error) {
-        console.error('Get grade scales error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-};
+    res.json({ scales });
+});
 
 // Create grade scale with entries
-const createGradeScale = async (req, res) => {
+const createGradeScale = asyncHandler(async (req, res) => {
+    const { name, scaleType, isDefault, entries } = req.body;
+
+    if (!name || !scaleType || !entries || !Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ error: 'Required: name, scaleType, entries (array with at least one entry)' });
+    }
+
+    // If setting as default, unset other defaults
+    if (isDefault) {
+        await prisma.gradeScale.updateMany({
+            where: { isDefault: true },
+            data: { isDefault: false },
+        });
+    }
+
     try {
-        const { name, scaleType, isDefault, entries } = req.body;
-
-        if (!name || !scaleType || !entries || !Array.isArray(entries) || entries.length === 0) {
-            return res.status(400).json({ error: 'Required: name, scaleType, entries (array with at least one entry)' });
-        }
-
-        // If setting as default, unset other defaults
-        if (isDefault) {
-            await prisma.gradeScale.updateMany({
-                where: { isDefault: true },
-                data: { isDefault: false },
-            });
-        }
-
         const scale = await prisma.gradeScale.create({
             data: {
                 name,
@@ -60,92 +57,81 @@ const createGradeScale = async (req, res) => {
         if (error.code === 'P2002') {
             return res.status(409).json({ error: 'A grade scale with this name already exists' });
         }
-        console.error('Create grade scale error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        throw error;
     }
-};
+});
 
 // Update grade scale (replace entries)
-const updateGradeScale = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name, scaleType, isDefault, entries } = req.body;
+const updateGradeScale = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { name, scaleType, isDefault, entries } = req.body;
 
-        const existing = await prisma.gradeScale.findUnique({ where: { id } });
-        if (!existing) {
-            return res.status(404).json({ error: 'Grade scale not found' });
-        }
-
-        // If setting as default, unset other defaults
-        if (isDefault) {
-            await prisma.gradeScale.updateMany({
-                where: { isDefault: true, id: { not: id } },
-                data: { isDefault: false },
-            });
-        }
-
-        // Transaction: update scale + replace entries
-        const scale = await prisma.$transaction(async (tx) => {
-            // Delete old entries
-            await tx.gradeScaleEntry.deleteMany({ where: { gradeScaleId: id } });
-
-            // Update scale and create new entries
-            return tx.gradeScale.update({
-                where: { id },
-                data: {
-                    name: name || existing.name,
-                    scaleType: scaleType || existing.scaleType,
-                    isDefault: isDefault !== undefined ? isDefault : existing.isDefault,
-                    entries: entries ? {
-                        create: entries.map((entry, idx) => ({
-                            grade: entry.grade,
-                            minPercent: parseFloat(entry.minPercent),
-                            maxPercent: parseFloat(entry.maxPercent),
-                            gradePoint: entry.gradePoint ? parseFloat(entry.gradePoint) : null,
-                            description: entry.description || null,
-                            order: entry.order || idx + 1,
-                        })),
-                    } : undefined,
-                },
-                include: {
-                    entries: { orderBy: { order: 'asc' } },
-                },
-            });
-        });
-
-        res.json({ message: 'Grade scale updated successfully', scale });
-    } catch (error) {
-        console.error('Update grade scale error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    const existing = await prisma.gradeScale.findUnique({ where: { id } });
+    if (!existing) {
+        return res.status(404).json({ error: 'Grade scale not found' });
     }
-};
+
+    // If setting as default, unset other defaults
+    if (isDefault) {
+        await prisma.gradeScale.updateMany({
+            where: { isDefault: true, id: { not: id } },
+            data: { isDefault: false },
+        });
+    }
+
+    // Transaction: update scale + replace entries
+    const scale = await prisma.$transaction(async (tx) => {
+        // Delete old entries
+        await tx.gradeScaleEntry.deleteMany({ where: { gradeScaleId: id } });
+
+        // Update scale and create new entries
+        return tx.gradeScale.update({
+            where: { id },
+            data: {
+                name: name || existing.name,
+                scaleType: scaleType || existing.scaleType,
+                isDefault: isDefault !== undefined ? isDefault : existing.isDefault,
+                entries: entries ? {
+                    create: entries.map((entry, idx) => ({
+                        grade: entry.grade,
+                        minPercent: parseFloat(entry.minPercent),
+                        maxPercent: parseFloat(entry.maxPercent),
+                        gradePoint: entry.gradePoint ? parseFloat(entry.gradePoint) : null,
+                        description: entry.description || null,
+                        order: entry.order || idx + 1,
+                    })),
+                } : undefined,
+            },
+            include: {
+                entries: { orderBy: { order: 'asc' } },
+            },
+        });
+    });
+
+    res.json({ message: 'Grade scale updated successfully', scale });
+});
 
 // Delete grade scale
-const deleteGradeScale = async (req, res) => {
-    try {
-        const { id } = req.params;
+const deleteGradeScale = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const existing = await prisma.gradeScale.findUnique({
-            where: { id },
-            include: { _count: { select: { exams: true } } },
-        });
+    const existing = await prisma.gradeScale.findUnique({
+        where: { id },
+        include: { _count: { select: { exams: true } } },
+    });
 
-        if (!existing) {
-            return res.status(404).json({ error: 'Grade scale not found' });
-        }
-
-        if (existing._count.exams > 0) {
-            return res.status(400).json({ error: `Cannot delete: ${existing._count.exams} exams use this grade scale` });
-        }
-
-        await prisma.gradeScale.delete({ where: { id } });
-
-        res.json({ message: 'Grade scale deleted successfully' });
-    } catch (error) {
-        console.error('Delete grade scale error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    if (!existing) {
+        return res.status(404).json({ error: 'Grade scale not found' });
     }
-};
+
+    if (existing._count.exams > 0) {
+        return res.status(400).json({ error: `Cannot delete: ${existing._count.exams} exams use this grade scale` });
+    }
+
+    await prisma.gradeScale.delete({ where: { id } });
+
+    res.json({ message: 'Grade scale deleted successfully' });
+});
 
 module.exports = {
     getGradeScales,

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { dashboardAPI } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
+import { useSocket } from '@/hooks/useSocket';
 import {
     BarChart,
     Bar,
@@ -74,11 +75,13 @@ function formatINR(amount: number): string {
 }
 
 function formatFull(amount: number): string {
-    return `₹${amount.toLocaleString('en-IN')}`;
+    const locale = process.env.NEXT_PUBLIC_LOCALE || 'en-IN';
+    return `₹${amount.toLocaleString(locale)}`;
 }
 
 function formatTime(iso: string): string {
-    return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const locale = process.env.NEXT_PUBLIC_LOCALE || 'en-IN';
+    return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 export function AccountantDashboard() {
@@ -86,9 +89,29 @@ export function AccountantDashboard() {
     const [data, setData] = useState<AccountantStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    const { socket } = useSocket();
+
     useEffect(() => {
         fetchStats();
     }, []);
+
+    useEffect(() => {
+        if (socket) {
+            socket.emit('join_dashboard', 'ACCOUNTANT');
+            
+            socket.on('FEE_PAYMENT_CREATED', (payment) => {
+                console.log('New fee payment received via socket:', payment);
+                // Re-fetch stats to update trend and summary
+                fetchStats();
+            });
+        }
+        
+        return () => {
+            if (socket) {
+                socket.off('FEE_PAYMENT_CREATED');
+            }
+        };
+    }, [socket]);
 
     const fetchStats = async () => {
         try {
@@ -103,7 +126,7 @@ export function AccountantDashboard() {
     };
 
     const firstName = user?.firstName || 'Accountant';
-    const today = new Date().toLocaleDateString('en-IN', {
+    const today = new Date().toLocaleDateString(process.env.NEXT_PUBLIC_LOCALE || 'en-IN', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
 

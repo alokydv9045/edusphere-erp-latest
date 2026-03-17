@@ -196,9 +196,69 @@ class StudentService {
             halfDay: enrichedAttendance.filter((a) => a.status === 'HALF_DAY').length,
         };
 
-        stats.percentage = stats.total > 0 ? ((stats.present / stats.total) * 100).toFixed(2) : 0;
+        stats.percentage = stats.total > 0 ? (((stats.present + stats.late) / stats.total) * 100).toFixed(2) : 0;
 
-        return { attendance: enrichedAttendance, stats };
+        // 4. Calculate Streak (Presence Streak)
+        let currentStreak = 0;
+        const sortedAttendance = [...enrichedAttendance].sort((a, b) => new Date(b.date) - new Date(a.date));
+        for (const record of sortedAttendance) {
+            if (record.status === 'PRESENT' || record.status === 'LATE') {
+                currentStreak++;
+            } else if (record.status === 'ABSENT') {
+                break;
+            }
+            // Skip other statuses or count them as gaps? Usually only consecutive presence counts.
+        }
+        stats.currentStreak = currentStreak;
+
+        // 5. Calculate Subject-wise stats
+        const subjectWise = {};
+        enrichedAttendance.forEach(a => {
+            if (a.subjectId) {
+                if (!subjectWise[a.subjectId]) {
+                    subjectWise[a.subjectId] = {
+                        name: a.subject?.name || 'Unknown Subject',
+                        total: 0,
+                        present: 0,
+                        absent: 0,
+                        late: 0
+                    };
+                }
+                const s = subjectWise[a.subjectId];
+                s.total++;
+                if (a.status === 'PRESENT') s.present++;
+                else if (a.status === 'ABSENT') s.absent++;
+                else if (a.status === 'LATE') s.late++;
+                
+                s.percentage = s.total > 0 ? (((s.present + s.late) / s.total) * 100).toFixed(1) : 0;
+            }
+        });
+
+        // 6. Monthly Comparison (Current month vs Last month)
+        const now = new Date();
+        const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+        const thisMonthRecords = enrichedAttendance.filter(a => new Date(a.date) >= firstDayThisMonth);
+        const lastMonthRecords = enrichedAttendance.filter(a => new Date(a.date) >= firstDayLastMonth && new Date(a.date) <= lastDayLastMonth);
+
+        const calcPct = (recs) => {
+            if (recs.length === 0) return 0;
+            const p = recs.filter(r => r.status === 'PRESENT' || r.status === 'LATE').length;
+            return (p / recs.length) * 100;
+        };
+
+        const thisMonthPct = calcPct(thisMonthRecords);
+        const lastMonthPct = calcPct(lastMonthRecords);
+        
+        stats.monthlyDelta = lastMonthPct > 0 ? (thisMonthPct - lastMonthPct).toFixed(1) : thisMonthPct.toFixed(1);
+
+        return { 
+            attendance: enrichedAttendance, 
+            stats,
+            subjectWise: Object.values(subjectWise)
+        };
     }
 
     /**

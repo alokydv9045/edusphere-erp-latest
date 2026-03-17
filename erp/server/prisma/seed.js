@@ -2,6 +2,13 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
+// ⛔ Safety guard — prevent seeding demo data in production
+if (process.env.NODE_ENV === 'production') {
+  console.error('❌ Seed script cannot run in production environment!');
+  console.error('   This would overwrite production data with demo data.');
+  process.exit(1);
+}
+
 async function main() {
     console.log('🌱 Starting comprehensive ERP database seed...');
     const passwordHash = await bcrypt.hash('School123!', 10);
@@ -292,12 +299,12 @@ async function main() {
     // ─── 7. FEE STRUCTURE ──────────────────────────────────────────────────────
     console.log('\n💰 Creating fee structure...');
 
-    const existingFeeStructure = await prisma.feeStructure.findFirst({
+    let fs = await prisma.feeStructure.findFirst({
         where: { academicYearId: academicYear.id, classId: class6.id },
     });
 
-    if (!existingFeeStructure) {
-        await prisma.feeStructure.create({
+    if (!fs) {
+        fs = await prisma.feeStructure.create({
             data: {
                 name: 'Annual Fee 2024-25 (Class 6)',
                 classId: class6.id, academicYearId: academicYear.id,
@@ -311,6 +318,94 @@ async function main() {
                 },
             },
         });
+    }
+
+    // Always ensure Class 6 students have this ledger assigned
+    console.log('🔗 Ensuring Class 6 students have fee ledgers...');
+    const class6Students = await prisma.student.findMany({
+        where: { currentClassId: class6.id }
+    });
+
+    for (const student of class6Students) {
+        await prisma.studentFeeLedger.upsert({
+            where: {
+                studentId_academicYearId_feeStructureId: {
+                    studentId: student.id,
+                    academicYearId: academicYear.id,
+                    feeStructureId: fs.id
+                }
+            },
+            update: {},
+            create: {
+                studentId: student.id,
+                feeStructureId: fs.id,
+                academicYearId: academicYear.id,
+                totalPayable: fs.totalAmount,
+                totalPaid: 0,
+                totalDiscount: 0,
+                totalPending: fs.totalAmount,
+                status: 'PENDING'
+            }
+        });
+    }
+
+    // ─── 8. LIBRARY BOOKS ──────────────────────────────────────────────────────
+    console.log('\n📚 Seeding library books...');
+    const booksData = [
+        { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', isbn: '9780743273565', category: 'Fiction', type: 'PHYSICAL', totalCopies: 5 },
+        { title: 'A Brief History of Time', author: 'Stephen Hawking', isbn: '9780553380163', category: 'Science', type: 'PHYSICAL', totalCopies: 3 },
+        { title: 'Introduction to Algorithms', author: 'Cormen et al.', isbn: '9780262033848', category: 'Computer Science', type: 'REFERENCE', totalCopies: 2 },
+        { title: 'The Art of Computer Programming', author: 'Donald Knuth', isbn: '9780201896831', category: 'Computer Science', type: 'REFERENCE', totalCopies: 1 },
+        { title: 'Sapiens: A Brief History of Humankind', author: 'Yuval Noah Harari', isbn: '9780062316097', category: 'History', type: 'PHYSICAL', totalCopies: 4 }
+    ];
+
+    const seededBooks = [];
+    for (const b of booksData) {
+        const book = await prisma.book.upsert({
+            where: { isbn: b.isbn },
+            update: {},
+            create: {
+                ...b,
+                availableCopies: b.totalCopies,
+                status: 'AVAILABLE',
+                condition: 'NEW'
+            }
+        });
+        seededBooks.push(book);
+    }
+
+    // ─── 9. INITIAL LIBRARY ISSUES ─────────────────────────────────────────────
+    console.log('\n📖 Creating initial library issues for analytics...');
+    const students = await prisma.student.findMany({ take: 3 });
+    
+    if (students.length > 0 && seededBooks.length > 0) {
+        // Issue 1: Active issue
+        await prisma.libraryIssue.create({
+            data: {
+                bookId: seededBooks[0].id,
+                studentId: students[0].id,
+                issueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+                dueDate: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000),   // 9 days from now
+                status: 'ISSUED',
+                issuedBy: systemAdmin.id
+            }
+        });
+
+        // Issue 2: Overdue issue
+        await prisma.libraryIssue.create({
+            data: {
+                bookId: seededBooks[1].id,
+                studentId: students[1].id,
+                issueDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), // 20 days ago
+                dueDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),    // 6 days overdue
+                status: 'ISSUED',
+                issuedBy: systemAdmin.id
+            }
+        });
+
+        // Update book available copies
+        await prisma.book.update({ where: { id: seededBooks[0].id }, data: { availableCopies: seededBooks[0].totalCopies - 1 } });
+        await prisma.book.update({ where: { id: seededBooks[1].id }, data: { availableCopies: seededBooks[1].totalCopies - 1 } });
     }
 
     // ─── Summary ───────────────────────────────────────────────────────────────

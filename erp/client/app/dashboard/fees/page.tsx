@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Loader2, IndianRupee, Receipt, TrendingUp, Search, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, Loader2, IndianRupee, Receipt, TrendingUp, Search, Eye, Edit, Trash2, PieChart } from 'lucide-react';
+import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/auth-context';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar } from 'recharts';
@@ -61,6 +62,7 @@ export default function FeesPage() {
   const [selectedStructure, setSelectedStructure] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [payingLedgerId, setPayingLedgerId] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const { canManageFeeStructures, canCollectFees, canRegisterStudents, isStudent } = usePermissions();
   const { user } = useAuth();
@@ -270,7 +272,7 @@ export default function FeesPage() {
         key: order.razorpayKeyId,
         amount: order.amountInPaise,
         currency: order.currency,
-        name: 'School Fee Payment',
+        name: `${process.env.NEXT_PUBLIC_SCHOOL_NAME || 'School'} Fee Payment`,
         description: `${order.feeType}`,
         order_id: order.orderId,
         prefill: {
@@ -293,7 +295,7 @@ export default function FeesPage() {
           }
         },
         theme: {
-          color: '#2563EB',
+          color: process.env.NEXT_PUBLIC_BRAND_COLOR || '#2563EB',
         },
       };
 
@@ -304,9 +306,30 @@ export default function FeesPage() {
       });
       rzp.open();
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to initiate payment');
+      const errorMsg = error?.response?.data?.message || error?.response?.data?.error || 'Failed to initiate payment';
+      toast.error(typeof errorMsg === 'string' ? errorMsg : 'Failed to initiate payment');
     } finally {
       setPayingLedgerId(null);
+    }
+  };
+
+  const handleDownloadStatement = async () => {
+    setIsDownloading(true);
+    try {
+      const blob = await feeAPI.downloadStatement('me');
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `FeeStatement_${user?.firstName || 'Student'}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      toast.success('Statement downloaded successfully');
+    } catch (err) {
+      console.error('Failed to download statement', err);
+      toast.error('Failed to download statement');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -494,7 +517,17 @@ export default function FeesPage() {
                   <p className="text-sm">No transaction history</p>
                 </div>
               )}
-              <Button variant="ghost" className="w-full text-xs h-8 text-blue-600" disabled>
+              <Button 
+                variant="ghost" 
+                className="w-full text-xs h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" 
+                onClick={handleDownloadStatement}
+                disabled={isDownloading}
+              >
+                {isDownloading ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                ) : (
+                  <Receipt className="h-3 w-3 mr-2" />
+                )}
                 Download Statement (PDF)
               </Button>
             </CardContent>
@@ -711,7 +744,7 @@ export default function FeesPage() {
                               <Select
                                 value={head.headName}
                                 onValueChange={(val) => {
-                                  let newHeads = [...structureForm.feeHeads];
+                                  const newHeads = [...structureForm.feeHeads];
                                   newHeads[index].headName = val;
                                   setStructureForm({ ...structureForm, feeHeads: newHeads });
                                 }}
@@ -732,7 +765,7 @@ export default function FeesPage() {
                                 placeholder="Amount"
                                 value={head.amount}
                                 onChange={(e) => {
-                                  let newHeads = [...structureForm.feeHeads];
+                                  const newHeads = [...structureForm.feeHeads];
                                   newHeads[index].amount = e.target.value;
                                   setStructureForm({ ...structureForm, feeHeads: newHeads });
                                 }}
@@ -1013,57 +1046,28 @@ export default function FeesPage() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-blue-600" />
-                <div>
-                  <CardTitle>Monthly Collection Trend</CardTitle>
-                  <CardDescription>Fee collection over the last 6 months</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px] w-full pt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats.trend}>
-                    <defs>
-                      <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#6b7280', fontSize: 12 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#6b7280', fontSize: 12 }}
-                      tickFormatter={(value) => `₹${value}`}
-                    />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      formatter={(value: any) => [`₹${value.toLocaleString()}`, 'Collected']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="collected"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorCollected)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid gap-6 md:grid-cols-2">
+            <RealtimeChart
+              title="Income Trend"
+              description="Monthly fee collection vs target"
+              endpoint="/dashboard/finance-stats"
+              socketEvent="FINANCE_UPDATE"
+              type="area"
+              dataKey="actual"
+              xAxisKey="month"
+              color="#22c55e"
+            />
+            <RealtimeChart
+              title="Collection Breakdown"
+              description="Payment method distribution"
+              endpoint="/dashboard/finance-stats"
+              socketEvent="FINANCE_UPDATE"
+              type="pie"
+              dataKey="value"
+              xAxisKey="name"
+              colors={["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"]}
+            />
+          </div>
 
           <Card>
             <CardHeader>

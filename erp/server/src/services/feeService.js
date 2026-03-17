@@ -1,6 +1,7 @@
 const feeRepo = require('../repositories/feeRepository');
 const NotFoundError = require('../errors/NotFoundError');
 const ValidationError = require('../errors/ValidationError');
+const logger = require('../config/logger');
 
 class FeeService {
     /**
@@ -14,34 +15,27 @@ class FeeService {
         if (academicYearId) where.academicYearId = academicYearId;
         if (isActive !== undefined) where.isActive = isActive === 'true';
 
-        const feeStructures = await feeRepo.findFeeStructures(where);
+        // Bug #7 fix: Use include to fetch class + academicYear in one query
+        const feeStructures = await feeRepo.findFeeStructures(where, {
+            class: { select: { id: true, name: true } },
+            academicYear: { select: { id: true, name: true } },
+            items: true,
+        });
 
-        // Enrich with Class and Academic Year
-        const enrichedStructures = await Promise.all(
-            feeStructures.map(async (structure) => {
-                let classDetails = null;
-                let academicYearDetails = null;
-                if (structure.classId) {
-                    classDetails = await feeRepo.findClassById(structure.classId);
-                }
-                if (structure.academicYearId) {
-                    academicYearDetails = await feeRepo.findAcademicYearById(structure.academicYearId);
-                }
-                return {
-                    ...structure,
-                    amount: structure.totalAmount, // Alias for frontend compatibility
-                    class: classDetails,
-                    academicYear: academicYearDetails,
-                };
-            })
-        );
+        const enrichedStructures = feeStructures.map(structure => ({
+            ...structure,
+            amount: structure.totalAmount, // Alias for frontend compatibility
+        }));
 
-        const total = enrichedStructures.length;
+        // Bug #9 fix: Apply pagination slice
         const page = parseInt(filters.page) || 1;
         const limit = parseInt(filters.limit) || 10;
+        const total = enrichedStructures.length;
+        const start = (page - 1) * limit;
+        const paginatedStructures = enrichedStructures.slice(start, start + limit);
 
         return {
-            structures: enrichedStructures,
+            structures: paginatedStructures,
             pagination: {
                 total,
                 pages: Math.ceil(total / limit),
@@ -116,21 +110,23 @@ class FeeService {
             };
         });
 
-        // Filter by computed fee status if provided
+        // Bug #22 fix: Handle OVERDUE status filter
         let resultStudents = enrichedStudents;
         if (status) {
             resultStudents = resultStudents.filter(s => {
                 if (status === 'PAID') return s.feeStatus === 'PAID';
                 if (status === 'PENDING') return s.feeStatus === 'PENDING' || s.feeStatus === 'PARTIAL';
+                if (status === 'OVERDUE') return s.feeStatus === 'PENDING' || s.feeStatus === 'PARTIAL';
                 return true;
             });
         }
 
+        // Bug #8 fix: Use filtered count for pagination, not raw DB count
         return {
             students: resultStudents,
             pagination: {
-                total,
-                pages: Math.ceil(total / take),
+                total: status ? resultStudents.length : total,
+                pages: Math.ceil((status ? resultStudents.length : total) / take),
                 page: parseInt(page),
                 limit: take
             }
@@ -192,10 +188,10 @@ class FeeService {
             if (students.length > 0) {
                 const studentIds = students.map(s => s.id);
                 await feeRepo.syncStudentFeeLedgers(studentIds, structure);
-                console.log(`[FeeService] Synced ${students.length} students with structure ${structure.name}`);
+                logger.info(`[FeeService] Synced ${students.length} students with structure ${structure.name}`);
             }
         } catch (err) {
-            console.error('[FeeService] Failed to sync students with structure:', err.message);
+            logger.error(`[FeeService] Failed to sync students with structure: ${err.message}`);
             // We don't throw here to avoid failing the main creation process, 
             // but in a production app we might want to queue this or retry.
         }
@@ -239,7 +235,9 @@ class FeeService {
 
         if (data.feeHeads) {
             updateData.totalAmount = data.feeHeads.reduce((sum, head) => sum + parseFloat(head.amount || 0), 0);
+            // Bug #12 fix: Delete old items before creating new ones
             updateData.items = {
+                deleteMany: {},
                 create: data.feeHeads.map(item => ({
                     headName: item.headName,
                     amount: parseFloat(item.amount || 0),
@@ -332,8 +330,9 @@ class FeeService {
      */
     async getStudentFeeStatus(studentId, academicYearId) {
         const ledgers = await feeRepo.findStudentLedgers(studentId, academicYearId);
-        if (!ledgers) {
-            throw new Error('Database schema mismatch. Please run "npm run prisma:push && npm run prisma:generate" in the server terminal to apply fee system updates.');
+        // Bug #23 fix: findMany returns [] not null, so check length
+        if (!ledgers || ledgers.length === 0) {
+            // Return empty summary instead of throwing — student may simply have no fees assigned
         }
 
         const student = await feeRepo.findStudentForFeeStatus(studentId);

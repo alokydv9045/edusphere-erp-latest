@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Loader2, Bell, Calendar, Edit, Trash2 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useSocket } from '@/hooks/useSocket';
 
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -50,6 +51,8 @@ export default function AnnouncementsPage() {
     }
   }, []);
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     if (isStudent) {
       fetchActiveAnnouncements();
@@ -57,6 +60,25 @@ export default function AnnouncementsPage() {
       fetchAnnouncements();
     }
   }, [isStudent, fetchActiveAnnouncements, fetchAnnouncements]);
+
+  useEffect(() => {
+    if (socket) {
+      const handleUpdate = () => {
+        if (isStudent) fetchActiveAnnouncements();
+        else fetchAnnouncements();
+      };
+
+      socket.on('ANNOUNCEMENT_CREATED', handleUpdate);
+      socket.on('ANNOUNCEMENT_UPDATED', handleUpdate);
+      socket.on('ANNOUNCEMENT_DELETED', handleUpdate);
+
+      return () => {
+        socket.off('ANNOUNCEMENT_CREATED', handleUpdate);
+        socket.off('ANNOUNCEMENT_UPDATED', handleUpdate);
+        socket.off('ANNOUNCEMENT_DELETED', handleUpdate);
+      };
+    }
+  }, [socket, isStudent, fetchActiveAnnouncements, fetchAnnouncements]);
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();

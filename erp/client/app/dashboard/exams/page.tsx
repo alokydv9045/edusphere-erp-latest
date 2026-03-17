@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Loader2, Eye, Calendar, Trash2, Lock, Unlock, Filter } from 'lucide-react';
+import { Search, Plus, Loader2, Eye, Calendar, Trash2, Lock, Unlock } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
 
 export default function ExamsPage() {
   const [exams, setExams] = useState<any[]>([]);
@@ -157,6 +158,30 @@ export default function ExamsPage() {
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Analytics Section */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <RealtimeChart
+          title="Subject Performance"
+          description="Average marks distribution across subjects"
+          endpoint="/dashboard/exam-stats"
+          socketEvent="EXAM_UPDATE"
+          type="radar"
+          dataKey="average"
+          xAxisKey="subject"
+          color="#ec4899"
+        />
+        <RealtimeChart
+          title="Average Score Trend"
+          description="Class average performance over time"
+          endpoint="/dashboard/exam-stats"
+          socketEvent="EXAM_UPDATE"
+          type="line"
+          dataKey="average"
+          xAxisKey="date"
+          color="#3b82f6"
+        />
       </div>
 
       <Card>

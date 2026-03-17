@@ -14,12 +14,15 @@ import {
   Phone, Mail, Download, Upload, ClipboardList, Activity,
   MessageSquare,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { dashboardAPI, type DashboardStats, type RecentActivity, type UpcomingExam, type FeeCollectionSummary, teacherAPI, examAPI, feeAPI } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useSocket } from '@/hooks/useSocket';
+import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 function formatINR(amount: number): string {
@@ -41,6 +44,7 @@ export default function DashboardPage() {
   const { canCollectFees, canManageFees, canViewStudents } = usePermissions();
 
   const role = user?.role || '';
+  const { socket } = useSocket();
   const firstName = user?.firstName || 'User';
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -93,9 +97,59 @@ export default function DashboardPage() {
     }
   };
 
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const isAdminOrPrincipal = ['ADMIN', 'SUPER_ADMIN'].includes(role);
+  const isTeacher = role === 'TEACHER';
+  const isAccountant = role === 'ACCOUNTANT';
+  const isStudent = role === 'STUDENT';
+  const isAdmissionManager = role === 'ADMISSION_MANAGER';
+
   useEffect(() => {
     loadDashboard();
-  }, [role]);
+  }, [role, socket]);
+
+  useEffect(() => {
+    // Join role-specific room for real-time updates
+    if (socket && role) {
+      socket.emit('join_dashboard', role);
+
+      // Join targeted rooms for Students and Teachers if IDs are available
+      if (isTeacher && stats.myClassId) {
+        socket.emit('join_room', `class_${stats.myClassId}`);
+      }
+      if (isStudent && stats.studentId) {
+        socket.emit('join_room', `student_${stats.studentId}`);
+      }
+
+      // Listen for updates that should refresh the dashboard
+      const handleUpdate = () => {
+        console.log('Real-time update received, refreshing dashboard...');
+        loadDashboard();
+      };
+
+      socket.on('ATTENDANCE_MARKED', handleUpdate);
+      socket.on('STUDENT_REGISTERED', handleUpdate);
+      socket.on('FINANCE_UPDATE', handleUpdate);
+      socket.on('INVENTORY_STOCK_MOVEMENT', handleUpdate);
+      socket.on('PAYROLL_GENERATED', handleUpdate);
+      socket.on('PAYROLL_PAID', handleUpdate);
+      socket.on('LIBRARY_BOOK_ISSUED', handleUpdate);
+      socket.on('LIBRARY_BOOK_RETURNED', handleUpdate);
+      socket.on('ANNOUNCEMENT_CREATED', handleUpdate);
+
+      return () => {
+        socket.off('ATTENDANCE_MARKED', handleUpdate);
+        socket.off('STUDENT_REGISTERED', handleUpdate);
+        socket.off('FINANCE_UPDATE', handleUpdate);
+        socket.off('INVENTORY_STOCK_MOVEMENT', handleUpdate);
+        socket.off('PAYROLL_GENERATED', handleUpdate);
+        socket.off('PAYROLL_PAID', handleUpdate);
+        socket.off('LIBRARY_BOOK_ISSUED', handleUpdate);
+        socket.off('LIBRARY_BOOK_RETURNED', handleUpdate);
+        socket.off('ANNOUNCEMENT_CREATED', handleUpdate);
+      };
+    }
+  }, [role, socket, stats.myClassId, stats.studentId, isTeacher, isStudent]);
 
   if (isLoading) {
     return (
@@ -107,13 +161,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  // ── Derived ───────────────────────────────────────────────────────────────
-  const isAdminOrPrincipal = ['ADMIN', 'SUPER_ADMIN'].includes(role);
-  const isTeacher = role === 'TEACHER';
-  const isAccountant = role === 'ACCOUNTANT';
-  const isStudent = role === 'STUDENT';
-  const isAdmissionManager = role === 'ADMISSION_MANAGER';
 
   const acctSummary = accountantData?.summary ?? { todayCollection: 0, yearCollection: 0, pendingAmount: 0, txToday: 0 };
   const acctTx = accountantData?.todayTransactions ?? [];
@@ -274,133 +321,133 @@ export default function DashboardPage() {
 
         {/* ACCOUNTANT: fee collection KPIs */}
         {isAccountant && (<>
-          <Card className="border-l-4 border-l-green-500">
+          <Card className="border-l-4 border-l-primary hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Today's Collection</CardTitle>
-              <div className="rounded-full bg-green-100 p-2"><IndianRupee className="h-4 w-4 text-green-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Today's Collection</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><IndianRupee className="h-4 w-4 text-primary" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-700">{formatINR(acctSummary.todayCollection)}</div>
-              <p className="mt-1 text-xs text-muted-foreground">{acctSummary.txToday} transaction{acctSummary.txToday !== 1 ? 's' : ''} today</p>
+              <div className="text-2xl font-black tracking-tight">{formatINR(acctSummary.todayCollection)}</div>
+              <p className="mt-1 text-xs font-semibold text-primary/80">{acctSummary.txToday} transaction{acctSummary.txToday !== 1 ? 's' : ''} today</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-indigo-500">
+          <Card className="border-l-4 border-l-primary/60 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Year-to-Date</CardTitle>
-              <div className="rounded-full bg-indigo-100 p-2"><TrendingUp className="h-4 w-4 text-indigo-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Year-to-Date</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><TrendingUp className="h-4 w-4 text-primary/80" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatINR(acctSummary.yearCollection)}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Current academic year</p>
+              <div className="text-2xl font-black tracking-tight">{formatINR(acctSummary.yearCollection)}</div>
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">Current academic year</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-orange-500">
+          <Card className="border-l-4 border-l-destructive hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
-              <div className="rounded-full bg-orange-100 p-2"><AlertCircle className="h-4 w-4 text-orange-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Pending Amount</CardTitle>
+              <div className="rounded-full bg-destructive/10 p-2"><AlertCircle className="h-4 w-4 text-destructive" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-700">{formatINR(acctSummary.pendingAmount)}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Across all students</p>
+              <div className="text-2xl font-black tracking-tight text-destructive">{formatINR(acctSummary.pendingAmount)}</div>
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">Across all students</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-blue-500">
+          <Card className="border-l-4 border-l-primary/40 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Receipts Issued</CardTitle>
-              <div className="rounded-full bg-blue-100 p-2"><Receipt className="h-4 w-4 text-blue-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Receipts Issued</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><Receipt className="h-4 w-4 text-primary/60" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{acctSummary.txToday}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Fee receipts today</p>
+              <div className="text-2xl font-black tracking-tight">{acctSummary.txToday}</div>
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">Fee receipts today</p>
             </CardContent>
           </Card>
         </>)}
 
         {/* TEACHER: class-specific stats */}
         {isTeacher && (<>
-          <Card className="border-l-4 border-l-purple-500">
+          <Card className="border-l-4 border-l-primary hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Attendance Today</CardTitle>
-              <div className="rounded-full bg-purple-100 p-2"><CalendarCheck className="h-4 w-4 text-purple-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Attendance Today</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><CalendarCheck className="h-4 w-4 text-primary" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.attendanceToday}%</div>
+              <div className="text-2xl font-black tracking-tight">{stats.attendanceToday}%</div>
               <Progress value={stats.attendanceToday} className="mt-2 h-1.5" />
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-blue-500">
+          <Card className="border-l-4 border-l-primary/60 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-              <div className="rounded-full bg-blue-100 p-2"><Users className="h-4 w-4 text-blue-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Total Students</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><Users className="h-4 w-4 text-primary/80" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalStudents}</div>
-              <p className="text-xs text-muted-foreground">In my classes</p>
+              <div className="text-2xl font-black tracking-tight">{stats.totalStudents}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">In my classes</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-orange-500">
+          <Card className="border-l-4 border-l-primary/40 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Pending Attendance</CardTitle>
-              <div className="rounded-full bg-orange-100 p-2"><AlertCircle className="h-4 w-4 text-orange-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Pending Attendance</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><AlertCircle className="h-4 w-4 text-primary/60" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingAttendance ?? 0}</div>
-              <p className="text-xs text-muted-foreground">Class sessions remaining</p>
+              <div className="text-2xl font-black tracking-tight">{stats.pendingAttendance ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">Class sessions remaining</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-red-500">
+          <Card className="border-l-4 border-l-destructive hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Overdue Books</CardTitle>
-              <div className="rounded-full bg-red-100 p-2"><BookOpen className="h-4 w-4 text-red-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Overdue Books</CardTitle>
+              <div className="rounded-full bg-destructive/10 p-2"><BookOpen className="h-4 w-4 text-destructive" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.overdueBooks ?? 0}</div>
-              <p className="text-xs text-muted-foreground">Library overdue</p>
+              <div className="text-2xl font-black tracking-tight">{stats.overdueBooks ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">Library overdue</p>
             </CardContent>
           </Card>
         </>)}
 
         {/* STUDENT: personal stats */}
         {isStudent && (<>
-          <Card className="border-l-4 border-l-blue-500">
+          <Card className="border-l-4 border-l-primary hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">My Attendance</CardTitle>
-              <div className="rounded-full bg-blue-100 p-2"><CalendarCheck className="h-4 w-4 text-blue-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">My Attendance</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><CalendarCheck className="h-4 w-4 text-primary" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.attendancePercentage ?? stats.attendanceToday}%</div>
+              <div className="text-2xl font-black tracking-tight">{stats.attendancePercentage ?? stats.attendanceToday}%</div>
               <Progress value={stats.attendancePercentage ?? stats.attendanceToday} className="mt-2 h-1.5" />
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-orange-500">
+          <Card className="border-l-4 border-l-destructive hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Pending Fees</CardTitle>
-              <div className="rounded-full bg-orange-100 p-2"><AlertCircle className="h-4 w-4 text-orange-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Pending Fees</CardTitle>
+              <div className="rounded-full bg-destructive/10 p-2"><AlertCircle className="h-4 w-4 text-destructive" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingFees ?? 0}</div>
-              <p className="text-xs text-muted-foreground">Unpaid invoices</p>
+              <div className="text-2xl font-black tracking-tight text-destructive">{stats.pendingFees ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">Unpaid invoices</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-pink-500">
+          <Card className="border-l-4 border-l-primary/40 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Books Due</CardTitle>
-              <div className="rounded-full bg-pink-100 p-2"><Clock className="h-4 w-4 text-pink-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Books Due</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><Clock className="h-4 w-4 text-primary/60" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.booksDue ?? 0}</div>
-              <p className="text-xs text-muted-foreground">To return</p>
+              <div className="text-2xl font-black tracking-tight">{stats.booksDue ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">To return</p>
             </CardContent>
           </Card>
           <Link href="/dashboard/exams/results">
-            <Card className="border-l-4 border-l-emerald-500 overflow-hidden group hover:shadow-md transition-all cursor-pointer">
+            <Card className="border-l-4 border-l-primary/60 overflow-hidden group hover:shadow-md transition-all cursor-pointer">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium">My Results</CardTitle>
-                <div className="rounded-full bg-emerald-100 p-2 group-hover:bg-emerald-200 transition-colors"><FileText className="h-4 w-4 text-emerald-600" /></div>
+                <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">My Results</CardTitle>
+                <div className="rounded-full bg-primary/10 p-2 group-hover:bg-primary/20 transition-colors"><FileText className="h-4 w-4 text-primary/80" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">View Results</div>
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 group-hover:text-emerald-600">
+                <div className="text-2xl font-black tracking-tight">View Results</div>
+                <p className="text-xs font-semibold text-muted-foreground mt-1 flex items-center gap-1 group-hover:text-primary transition-colors">
                   Marks & Report Cards <ArrowRight className="h-3 w-3" />
                 </p>
               </CardContent>
@@ -409,50 +456,76 @@ export default function DashboardPage() {
         </>)}
       </div>
 
+      {/* ── Student Real-time Analytics ── */}
+      {isStudent && stats.studentId && (
+        <div className="grid gap-6 md:grid-cols-2">
+          <RealtimeChart
+            title="My Attendance Trend"
+            description="Personal attendance over the last 7 days"
+            endpoint={`/dashboard/attendance-trend?studentId=${stats.studentId}`}
+            socketEvent="ATTENDANCE_MARKED"
+            type="line"
+            xAxisKey="date"
+            dataKey="percentage"
+            color="var(--primary)"
+          />
+          <RealtimeChart
+            title="Academic Performance"
+            description="Recent exam marks by subject"
+            endpoint={`/dashboard/student-performance?studentId=${stats.studentId}`}
+            socketEvent="EXAM_RESULT_PUBLISHED"
+            type="bar"
+            xAxisKey="subject"
+            dataKey="score"
+            color="oklch(0.6 0.118 184)"
+          />
+        </div>
+      )}
+
       {/* ══════════════════════════════════════════════════════════════════════
           SECTION 2: Secondary stat row (Admin only)
           ══════════════════════════════════════════════════════════════════════ */}
       {/* ── Admission Manager Specific KPI Section ── */}
       {isAdmissionManager && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-l-4 border-l-blue-500 shadow-sm">
+          <Card className="border-l-4 border-l-primary hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Admissions Today</CardTitle>
-              <UserPlus className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Admissions Today</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><UserPlus className="h-4 w-4 text-primary" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.admissionsToday ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">New students registered today</p>
+              <div className="text-2xl font-black tracking-tight">{stats.admissionsToday ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">New students registered today</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-indigo-500 shadow-sm">
+          <Card className="border-l-4 border-l-primary/60 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Monthly Admissions</CardTitle>
-              <TrendingUp className="h-4 w-4 text-indigo-600" />
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Monthly Admissions</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><TrendingUp className="h-4 w-4 text-primary/80" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.admissionsThisMonth ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">Total for this month</p>
+              <div className="text-2xl font-black tracking-tight">{stats.admissionsThisMonth ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">Total for this month</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-green-500 shadow-sm">
+          <Card className="border-l-4 border-l-primary/40 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Active Students</CardTitle>
-              <Users className="h-4 w-4 text-green-600" />
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Total Active Students</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><Users className="h-4 w-4 text-primary/60" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalStudents ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">Current school strength</p>
+              <div className="text-2xl font-black tracking-tight">{stats.totalStudents ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">Current school strength</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-amber-500 shadow-sm">
+          <Card className="border-l-4 border-l-secondary-foreground hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Open Enquiries</CardTitle>
-              <ClipboardList className="h-4 w-4 text-amber-600" />
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Open Enquiries</CardTitle>
+              <div className="rounded-full bg-secondary p-2"><ClipboardList className="h-4 w-4 text-secondary-foreground" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{(stats.funnelStats?.pending ?? 0) + (stats.funnelStats?.followUp ?? 0)}</div>
-              <p className="text-xs text-muted-foreground mt-1">Leads awaiting conversion</p>
+              <div className="text-2xl font-black tracking-tight">{(stats.funnelStats?.pending ?? 0) + (stats.funnelStats?.followUp ?? 0)}</div>
+              <p className="text-xs font-semibold text-muted-foreground mt-1">Leads awaiting conversion</p>
             </CardContent>
           </Card>
         </div>
@@ -462,48 +535,48 @@ export default function DashboardPage() {
       {isAdmissionManager && (
         <div className="grid gap-6 md:grid-cols-2">
           {/* Admission Funnel */}
-          <Card className="shadow-sm">
+          <Card className="shadow-sm border-none bg-card/50">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground font-bold">
                 <BarChart3 className="h-4 w-4 text-primary" />
                 Admission Funnel
               </CardTitle>
-              <CardDescription>Pipeline stages from enquiry to conversion</CardDescription>
+              <CardDescription className="text-muted-foreground font-medium">Pipeline stages from enquiry to conversion</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-400" /> Enquiries (Pending)</span>
-                    <span className="font-semibold">{stats.funnelStats?.pending ?? 0}</span>
+                    <span className="flex items-center gap-2 font-medium"><div className="w-2 h-2 rounded-full bg-primary/40" /> Enquiries (Pending)</span>
+                    <span className="font-bold">{stats.funnelStats?.pending ?? 0}</span>
                   </div>
-                  <Progress value={100} className="h-2 bg-slate-100" indicatorClassName="bg-amber-400" />
+                  <Progress value={100} className="h-2 bg-muted" indicatorClassName="bg-primary/40" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-400" /> Follow-ups</span>
-                    <span className="font-semibold">{stats.funnelStats?.followUp ?? 0}</span>
+                    <span className="flex items-center gap-2 font-medium"><div className="w-2 h-2 rounded-full bg-primary/70" /> Follow-ups</span>
+                    <span className="font-bold">{stats.funnelStats?.followUp ?? 0}</span>
                   </div>
                   <Progress
                     value={((stats.funnelStats?.followUp ?? 0) / (stats.funnelStats?.pending || 1)) * 100}
-                    className="h-2 bg-slate-100"
-                    indicatorClassName="bg-blue-400"
+                    className="h-2 bg-muted"
+                    indicatorClassName="bg-primary/70"
                   />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500" /> Converted</span>
-                    <span className="font-semibold">{stats.funnelStats?.converted ?? 0}</span>
+                    <span className="flex items-center gap-2 font-medium"><div className="w-2 h-2 rounded-full bg-primary" /> Converted</span>
+                    <span className="font-bold">{stats.funnelStats?.converted ?? 0}</span>
                   </div>
                   <Progress
                     value={((stats.funnelStats?.converted ?? 0) / ((stats.funnelStats?.pending || 1) + (stats.funnelStats?.followUp || 0) + (stats.funnelStats?.converted || 0))) * 100}
-                    className="h-2 bg-slate-100"
-                    indicatorClassName="bg-green-500"
+                    className="h-2 bg-muted"
+                    indicatorClassName="bg-primary"
                   />
                 </div>
               </div>
-              <div className="pt-2 border-t text-center">
-                <p className="text-xs text-muted-foreground italic">"Keep pushing leads through the pipeline to hit targets!"</p>
+              <div className="pt-4 border-t border-border flex justify-center items-center gap-2">
+                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold px-3 py-1">Conversion Focused</Badge>
               </div>
             </CardContent>
           </Card>
@@ -586,43 +659,44 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border overflow-hidden">
+            <div className="rounded-md border border-primary/10 overflow-hidden">
               <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="w-[200px]">Student</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                <TableHeader className="bg-primary/5">
+                  <TableRow className="hover:bg-transparent border-primary/10">
+                    <TableHead className="w-[200px] font-bold text-primary">Student</TableHead>
+                    <TableHead className="font-bold text-primary">Class</TableHead>
+                    <TableHead className="font-bold text-primary">Contact</TableHead>
+                    <TableHead className="font-bold text-primary">Status</TableHead>
+                    <TableHead className="text-right font-bold text-primary">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {stats.recentEnquiries && stats.recentEnquiries.length > 0 ? (
                     stats.recentEnquiries.map((enq) => (
-                      <TableRow key={enq.id} className="hover:bg-muted/30 transition-colors">
+                      <TableRow key={enq.id} className="hover:bg-primary/5 transition-colors border-primary/5">
                         <TableCell>
-                          <div className="font-medium">{enq.studentName}</div>
-                          <div className="text-[10px] text-muted-foreground">P: {enq.parentName}</div>
+                          <div className="font-bold text-foreground">{enq.studentName}</div>
+                          <div className="text-[10px] font-semibold text-muted-foreground">P: {enq.parentName}</div>
                         </TableCell>
-                        <TableCell className="text-sm">{enq.class}</TableCell>
+                        <TableCell className="text-sm font-medium">{enq.class}</TableCell>
                         <TableCell className="text-sm">
-                          <div className="flex items-center gap-1.5"><Phone className="h-3 w-3 text-muted-foreground" /> {enq.phone}</div>
+                          <div className="flex items-center gap-1.5 font-medium"><Phone className="h-3 w-3 text-primary/60" /> {enq.phone}</div>
                         </TableCell>
                         <TableCell>
                           <Badge
                             variant="secondary"
-                            className={`text-[10px] px-1.5 py-0 h-5 leading-none ${enq.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
-                              enq.status === 'FOLLOW_UP' ? 'bg-blue-100 text-blue-700' :
-                                'bg-green-100 text-green-700'
-                              }`}
+                            className={cn("text-[10px] px-1.5 py-0 h-5 leading-none font-bold",
+                              enq.status === 'PENDING' ? 'bg-primary/10 text-primary' :
+                                enq.status === 'FOLLOW_UP' ? 'bg-primary/20 text-primary' :
+                                  'bg-primary text-white'
+                            )}
                           >
                             {enq.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <Link href={`/dashboard/admissions/enquiries?id=${enq.id}`}>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary">
                               <MessageSquare className="h-3.5 w-3.5" />
                             </Button>
                           </Link>
@@ -631,7 +705,7 @@ export default function DashboardPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground font-medium">
                         No recent enquiries found.
                       </TableCell>
                     </TableRow>
@@ -646,46 +720,98 @@ export default function DashboardPage() {
       {/* ── KPI SECTION (Original Admin/Teacher) ── */}
       {isAdminOrPrincipal && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
+          <Card className="border-l-4 border-l-primary hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">New Admissions</CardTitle>
-              <div className="rounded-full bg-cyan-100 p-2"><UserPlus className="h-4 w-4 text-cyan-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">New Admissions</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><UserPlus className="h-4 w-4 text-primary" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.recentAdmissions ?? 0}</div>
-              <p className="text-xs text-muted-foreground">This month</p>
+              <div className="text-2xl font-black tracking-tight">{stats.recentAdmissions ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground">This month</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-l-4 border-l-primary/60 hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Upcoming Exams</CardTitle>
-              <div className="rounded-full bg-indigo-100 p-2"><FileText className="h-4 w-4 text-indigo-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Upcoming Exams</CardTitle>
+              <div className="rounded-full bg-primary/10 p-2"><FileText className="h-4 w-4 text-primary/80" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.upcomingExamCount ?? upcomingExams.length}</div>
-              <p className="text-xs text-muted-foreground">In next 30 days</p>
+              <div className="text-2xl font-black tracking-tight">{stats.upcomingExamCount ?? upcomingExams.length}</div>
+              <p className="text-xs font-semibold text-muted-foreground">In next 30 days</p>
             </CardContent>
           </Card>
-          <Card className={stats.pendingFeeCount && stats.pendingFeeCount > 0 ? 'border-orange-200 bg-orange-50/40' : ''}>
+          <Card className={cn("border-l-4 hover:shadow-md transition-shadow",
+            stats.pendingFeeCount && stats.pendingFeeCount > 0 ? 'border-l-destructive bg-destructive/5' : 'border-l-primary/40'
+          )}>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Pending Fees</CardTitle>
-              <div className="rounded-full bg-yellow-100 p-2"><AlertCircle className="h-4 w-4 text-yellow-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Pending Fees</CardTitle>
+              <div className="rounded-full bg-destructive/10 p-2"><AlertCircle className="h-4 w-4 text-destructive" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingFeeCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground">Outstanding payments</p>
+              <div className="text-2xl font-black tracking-tight">{stats.pendingFeeCount ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground">Outstanding payments</p>
             </CardContent>
           </Card>
-          <Card className={stats.overdueBooks && stats.overdueBooks > 0 ? 'border-red-200 bg-red-50/40' : ''}>
+          <Card className={cn("border-l-4 hover:shadow-md transition-shadow",
+            stats.overdueBooks && stats.overdueBooks > 0 ? 'border-l-destructive bg-destructive/5' : 'border-l-primary/30'
+          )}>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Overdue Books</CardTitle>
-              <div className="rounded-full bg-red-100 p-2"><BookOpen className="h-4 w-4 text-red-600" /></div>
+              <CardTitle className="text-sm font-bold uppercase tracking-tight text-muted-foreground">Overdue Books</CardTitle>
+              <div className="rounded-full bg-destructive/10 p-2"><BookOpen className="h-4 w-4 text-destructive" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.overdueBooks ?? 0}</div>
-              <p className="text-xs text-muted-foreground">Library overdue</p>
+              <div className="text-2xl font-black tracking-tight">{stats.overdueBooks ?? 0}</div>
+              <p className="text-xs font-semibold text-muted-foreground">Library overdue</p>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* ── Analytics & Trends (Real-time Charts) ── */}
+      {isAdminOrPrincipal && (
+        <div className="grid gap-6 md:grid-cols-2">
+          <RealtimeChart
+            title="Attendance Trend"
+            description="Live student attendance for the last 7 days"
+            endpoint="/dashboard/attendance-trend"
+            socketEvent="ATTENDANCE_MARKED"
+            type="area"
+            xAxisKey="date"
+            dataKey="percentage"
+            color="var(--primary)"
+          />
+          <RealtimeChart
+            title="Admission Activity"
+            description="Daily admission registrations"
+            endpoint="/dashboard/stats"
+            socketEvent="STUDENT_REGISTERED"
+            type="bar"
+            xAxisKey="name"
+            dataKey="count"
+            color="oklch(0.6 0.118 184)"
+          />
+          <RealtimeChart
+            title="Financial Overview"
+            description="Fee collection breakdown"
+            endpoint="/dashboard/finance-stats"
+            socketEvent="FINANCE_UPDATE"
+            type="pie"
+            xAxisKey="name"
+            dataKey="value"
+            dataProperty="modes"
+            colors={["var(--primary)", "oklch(0.6 0.118 184)", "oklch(0.4 0.07 227)", "oklch(0.8 0.15 230)"]}
+          />
+          <RealtimeChart
+            title="Collection Trend"
+            description="Monthly Collected vs Pending fees"
+            endpoint="/dashboard/finance-stats"
+            socketEvent="FINANCE_UPDATE"
+            type="bar"
+            xAxisKey="month"
+            dataKey={["collected", "pending"]}
+            dataProperty="trend"
+            colors={["oklch(0.6 0.118 184)", "oklch(0.4 0.07 227)"]}
+          />
         </div>
       )}
 
@@ -693,25 +819,31 @@ export default function DashboardPage() {
           SECTION 3: Accountant Quick Actions
           ══════════════════════════════════════════════════════════════════════ */}
       {isAccountant && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Quick Actions</CardTitle>
+        <Card className="border-none bg-primary/5">
+          <CardHeader className="pb-3 text-center">
+            <CardTitle className="text-sm font-bold text-primary uppercase tracking-widest">Financial Operations Dashboard</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap justify-center gap-4">
               <Link href="/dashboard/fees/collect">
-                <Button className="gap-2 bg-green-600 hover:bg-green-700 text-white">
+                <Button className="gap-2 bg-primary hover:bg-primary/90 text-white font-bold shadow-md hover:shadow-lg transition-all">
                   <CreditCard className="h-4 w-4" /> Collect Fee
                 </Button>
               </Link>
               <Link href="/dashboard/students">
-                <Button variant="outline" className="gap-2"><Search className="h-4 w-4" /> Search Student</Button>
+                <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/10 text-primary font-bold">
+                  <Search className="h-4 w-4" /> Search Student
+                </Button>
               </Link>
               <Link href="/dashboard/fees">
-                <Button variant="outline" className="gap-2"><Printer className="h-4 w-4" /> Reprint Receipt</Button>
+                <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/10 text-primary font-bold">
+                  <Printer className="h-4 w-4" /> Reprint Receipt
+                </Button>
               </Link>
               <Link href="/dashboard/fees">
-                <Button variant="outline" className="gap-2"><Users className="h-4 w-4" /> Pending Fees List</Button>
+                <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/10 text-primary font-bold">
+                  <Users className="h-4 w-4" /> Pending Fees List
+                </Button>
               </Link>
             </div>
           </CardContent>
@@ -726,44 +858,44 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
 
           {/* Activity / Transactions Feed */}
-          <Card className="col-span-4">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <Card className="col-span-4 border-none shadow-sm overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 bg-muted/30">
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  {isAccountant ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <BarChart3 className="h-4 w-4 text-muted-foreground" />}
+                <CardTitle className="flex items-center gap-2 text-foreground font-bold">
+                  {isAccountant ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <BarChart3 className="h-4 w-4 text-primary" />}
                   {isAccountant ? "Today's Transactions" : 'Recent Activity'}
                 </CardTitle>
-                <CardDescription>{isAccountant ? 'All fee receipts issued today' : 'Latest events across the school'}</CardDescription>
+                <CardDescription className="text-muted-foreground font-medium">{isAccountant ? 'All fee receipts issued today' : 'Latest events across the school'}</CardDescription>
               </div>
               {isAccountant && (
                 <Link href="/dashboard/fees">
-                  <Button variant="ghost" size="sm" className="gap-1 text-xs">View All <ArrowRight className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" className="gap-1 text-primary hover:bg-primary/10 font-bold">View All <ArrowRight className="h-3 w-3" /></Button>
                 </Link>
               )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               {isAccountant ? (
                 acctTx.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground bg-muted/20 rounded-xl">
                     <Receipt className="h-10 w-10 mb-2 opacity-30" />
-                    <p className="text-sm">No transactions yet today</p>
+                    <p className="text-sm font-medium">No transactions yet today</p>
                     <Link href="/dashboard/fees/collect" className="mt-3">
-                      <Button size="sm" className="bg-green-600 text-white hover:bg-green-700">Collect First Fee</Button>
+                      <Button size="sm" className="bg-primary text-white hover:bg-primary/90 font-bold">Collect First Fee</Button>
                     </Link>
                   </div>
                 ) : (
-                  <div className="space-y-0 divide-y">
+                  <div className="space-y-0 divide-y divide-primary/5">
                     {acctTx.slice(0, 8).map((tx: any) => (
-                      <div key={tx.id} className="flex items-center gap-3 py-2.5">
+                      <div key={tx.id} className="flex items-center gap-3 py-3 group hover:bg-primary/5 px-2 rounded-lg transition-colors">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{tx.studentName}</p>
-                          <p className="text-xs text-muted-foreground">{tx.class} · #{tx.receipt}</p>
+                          <p className="truncate text-sm font-bold text-foreground">{tx.studentName}</p>
+                          <p className="text-xs font-medium text-muted-foreground">{tx.class} · #{tx.receipt}</p>
                         </div>
-                        <Badge variant="secondary" className={`shrink-0 text-xs ${MODE_COLORS[tx.mode] ?? 'bg-gray-100 text-gray-700'}`}>{tx.mode}</Badge>
+                        <Badge variant="secondary" className={cn("shrink-0 text-[10px] font-bold", MODE_COLORS[tx.mode] ?? 'bg-muted text-muted-foreground')}>{tx.mode}</Badge>
                         <div className="text-right shrink-0">
-                          <p className="text-sm font-semibold text-green-700">₹{tx.amount.toLocaleString('en-IN')}</p>
-                          <p className="flex items-center gap-0.5 text-xs text-muted-foreground justify-end">
-                            <Clock className="h-3 w-3" />{new Date(tx.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          <p className="text-sm font-black text-primary">₹{tx.amount.toLocaleString('en-IN')}</p>
+                          <p className="flex items-center gap-0.5 text-[10px] font-bold text-muted-foreground justify-end">
+                            <Clock className="h-3 w-3 text-primary/40" />{new Date(tx.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
                       </div>
@@ -772,15 +904,20 @@ export default function DashboardPage() {
                 )
               ) : (
                 recentActivities.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No recent activities</p>
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <Activity className="h-10 w-10 mb-2 opacity-30" />
+                    <p className="text-sm font-medium">No recent activities</p>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {recentActivities.map((activity) => (
-                      <div key={activity.id} className="flex items-start gap-3">
-                        <Badge variant="secondary" className="mt-0.5 shrink-0 bg-slate-100 text-slate-700">{activity.type}</Badge>
+                      <div key={activity.id} className="flex items-start gap-4 p-2 hover:bg-primary/5 rounded-lg transition-all border border-transparent hover:border-primary/10">
+                        <div className="mt-1 w-2 h-2 rounded-full bg-primary shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium leading-none truncate">{activity.description}</p>
-                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Clock className="h-3 w-3" />{activity.time}</p>
+                          <p className="text-sm font-bold text-foreground leading-tight">{activity.description}</p>
+                          <p className="text-[10px] font-black uppercase text-primary/60 mt-1 flex items-center gap-1">
+                            {activity.type} · <Clock className="h-3 w-3" />{activity.time}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -794,34 +931,34 @@ export default function DashboardPage() {
           <Card className="col-span-3">
             {isAccountant ? (
               <>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-row items-center justify-between bg-destructive/5">
                   <div>
-                    <CardTitle className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-orange-500" />Top Pending Students</CardTitle>
-                    <CardDescription>Highest outstanding balances</CardDescription>
+                    <CardTitle className="flex items-center gap-2 text-destructive font-bold"><AlertCircle className="h-4 w-4" />Top Pending Students</CardTitle>
+                    <CardDescription className="text-destructive/80 font-medium">Highest outstanding balances</CardDescription>
                   </div>
-                  <Link href="/dashboard/fees"><Button variant="ghost" size="sm" className="gap-1 text-xs">Full List <ArrowRight className="h-3 w-3" /></Button></Link>
+                  <Link href="/dashboard/fees"><Button variant="ghost" size="sm" className="gap-1 text-xs text-destructive hover:bg-destructive/10">Full List <ArrowRight className="h-3 w-3" /></Button></Link>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-4">
                   {acctDefaulters.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                      <CheckCircle2 className="h-10 w-10 mb-2 text-green-400" />
-                      <p className="text-sm font-medium text-green-600">All fees are up to date!</p>
+                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground bg-muted/20 rounded-xl">
+                      <CheckCircle2 className="h-10 w-10 mb-2 text-primary/60" />
+                      <p className="text-sm font-bold text-primary">All fees are up to date!</p>
                     </div>
                   ) : (
-                    <div className="divide-y">
+                    <div className="divide-y divide-primary/5">
                       {acctDefaulters.map((d: any, i: number) => (
-                        <div key={d.studentId} className="flex items-center gap-4 py-3">
-                          <span className="w-5 text-xs text-muted-foreground font-mono">{i + 1}.</span>
+                        <div key={d.studentId} className="flex items-center gap-4 py-3 group hover:bg-destructive/5 px-2 rounded-lg transition-colors">
+                          <span className="w-5 text-xs text-muted-foreground font-black">{i + 1}.</span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{d.name}</p>
-                            <p className="text-xs text-muted-foreground">{d.class}</p>
+                            <p className="text-sm font-bold truncate text-foreground">{d.name}</p>
+                            <p className="text-[10px] font-semibold text-muted-foreground">{d.class}</p>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-sm font-bold text-orange-600">₹{d.pendingAmount.toLocaleString('en-IN')}</p>
-                            <p className="text-xs text-muted-foreground">pending</p>
+                            <p className="text-sm font-black text-destructive">₹{d.pendingAmount.toLocaleString('en-IN')}</p>
+                            <p className="text-[10px] font-bold text-muted-foreground">pending</p>
                           </div>
                           <Link href={`/dashboard/fees/collect/${d.studentId}`}>
-                            <Button size="sm" variant="outline" className="shrink-0 text-xs h-7 px-2">Collect</Button>
+                            <Button size="sm" variant="outline" className="shrink-0 text-xs h-7 px-2 border-primary/20 hover:bg-primary/10 text-primary font-bold">Collect</Button>
                           </Link>
                         </div>
                       ))}
@@ -869,46 +1006,83 @@ export default function DashboardPage() {
 
       {/* Teacher Quick Links */}
       {isTeacher && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><CalendarCheck className="h-4 w-4 text-muted-foreground" />Quick Actions</CardTitle>
-            <CardDescription>Jump to your most-used pages</CardDescription>
+        <Card className="border-none bg-primary/5">
+          <CardHeader className="pb-3 text-center">
+            <CardTitle className="text-sm font-bold text-primary uppercase tracking-widest">Academic Command Center</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-3">
-              {isTeacher && <Link href="/dashboard/attendance"><Button className="gap-2"><CalendarCheck className="h-4 w-4" /> Mark Attendance</Button></Link>}
-              {!isStudent && <Link href="/dashboard/hr/my-hr"><Button variant="outline" className="gap-2"><Clock className="h-4 w-4" /> My Leaves & HR</Button></Link>}
-              {isTeacher && <Link href="/dashboard/exams"><Button variant="outline" className="gap-2"><FileText className="h-4 w-4" /> View Exams</Button></Link>}
-              {isTeacher && <Link href="/dashboard/students"><Button variant="outline" className="gap-2"><Users className="h-4 w-4" /> My Students</Button></Link>}
-              {!isStudent && <Link href="/dashboard/announcements"><Button variant="outline" className="gap-2"><AlertCircle className="h-4 w-4" /> Announcements</Button></Link>}
+            <div className="flex flex-wrap justify-center gap-4">
+              {isTeacher && <Link href="/dashboard/attendance"><Button className="gap-2 bg-primary hover:bg-primary/90 text-white font-bold shadow-md">
+                <CalendarCheck className="h-4 w-4" /> Mark Attendance
+              </Button></Link>}
+              {!isStudent && <Link href="/dashboard/hr/my-hr"><Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold hover:bg-primary/10">
+                <Clock className="h-4 w-4" /> My Leaves & HR
+              </Button></Link>}
+              {isTeacher && <Link href="/dashboard/exams"><Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold hover:bg-primary/10">
+                <FileText className="h-4 w-4" /> View Exams
+              </Button></Link>}
+              {isTeacher && <Link href="/dashboard/students"><Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold hover:bg-primary/10">
+                <Users className="h-4 w-4" /> My Students
+              </Button></Link>}
+              {!isStudent && <Link href="/dashboard/announcements"><Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold hover:bg-primary/10">
+                <AlertCircle className="h-4 w-4" /> Announcements
+              </Button></Link>}
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Teacher Real-time Analytics ── */}
+      {isTeacher && stats.myClassId && (
+        <div className="grid gap-6 md:grid-cols-2">
+          <RealtimeChart
+            title="Class Attendance Trend"
+            description={`Attendance record for ${stats.myClassName || 'my class'}`}
+            endpoint={`/dashboard/attendance-trend?classId=${stats.myClassId}`}
+            socketEvent="ATTENDANCE_MARKED"
+            type="area"
+            xAxisKey="date"
+            dataKey="percentage"
+            color="var(--primary)"
+          />
+          <RealtimeChart
+            title="Class Performance"
+            description="Top 10 student scores in latest exam"
+            endpoint={`/dashboard/class-performance?classId=${stats.myClassId}`}
+            socketEvent="EXAM_RESULT_PUBLISHED"
+            type="bar"
+            xAxisKey="name"
+            dataKey="score"
+            color="oklch(0.6 0.118 184)"
+          />
+        </div>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           SECTION 5: Upcoming Exams (admin + teacher + student)
           ══════════════════════════════════════════════════════════════════════ */}
       {!isAccountant && upcomingExams.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" />Upcoming Examinations</CardTitle>
-            <CardDescription>Scheduled in the next 30 days</CardDescription>
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="bg-muted/30">
+            <CardTitle className="flex items-center gap-2 text-foreground font-bold"><FileText className="h-4 w-4 text-primary" />Upcoming Examinations</CardTitle>
+            <CardDescription className="text-muted-foreground font-medium">Scheduled in the next 30 days</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <CardContent className="pt-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {upcomingExams.map((exam) => {
                 const daysLeft = Math.ceil((new Date(exam.date).getTime() - Date.now()) / 86400000);
                 return (
-                  <div key={exam.id} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent">
-                    <div className="rounded-full bg-blue-100 p-2 shrink-0"><BookOpen className="h-4 w-4 text-blue-600" /></div>
+                  <div key={exam.id} className="flex items-center gap-3 rounded-xl border border-primary/10 p-4 transition-all hover:bg-primary/5 group">
+                    <div className="rounded-full bg-primary/10 p-2 shrink-0 group-hover:bg-primary/20 transition-colors"><BookOpen className="h-5 w-5 text-primary" /></div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{exam.name}</p>
-                      <p className="text-xs text-muted-foreground">{exam.class} · {exam.subject}</p>
+                      <p className="font-bold text-sm truncate text-foreground">{exam.name}</p>
+                      <p className="text-[10px] font-black uppercase text-muted-foreground">{exam.class} · {exam.subject}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-medium">{new Date(exam.date).toLocaleDateString('en-IN')}</p>
-                      <Badge variant="outline" className={`mt-1 text-xs ${daysLeft <= 3 ? 'border-red-300 text-red-600 bg-red-50' : 'border-blue-200 text-blue-600 bg-blue-50'}`}>
+                      <p className="text-[10px] font-black text-primary/60">{new Date(exam.date).toLocaleDateString('en-IN')}</p>
+                      <Badge variant="outline" className={cn("mt-1.5 text-[10px] font-black px-2 py-0 border-none",
+                        daysLeft <= 3 ? 'text-white bg-destructive' : 'text-primary bg-primary/10'
+                      )}>
                         {daysLeft}d left
                       </Badge>
                     </div>

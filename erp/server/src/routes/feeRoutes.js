@@ -13,7 +13,8 @@ const {
   approveAdjustment,
   processRefund,
   getAdjustments,
-  getFeeStats
+  getFeeStats,
+  downloadFeeStatement
 } = require('../controllers/feeController');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 
@@ -56,5 +57,6 @@ router.post('/refunds', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), valid
 
 // Student fee status/ledger
 router.get('/students/:id/status', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'STUDENT', 'PARENT'), getStudentFeeStatus);
+router.get('/students/:id/statement', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'STUDENT', 'PARENT'), downloadFeeStatement);
 
 module.exports = router;

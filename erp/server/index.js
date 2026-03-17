@@ -10,6 +10,7 @@ if (missing.length > 0) {
 }
 
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -40,9 +41,13 @@ const paymentRoutes = require('./src/routes/paymentRoutes');
 const schoolConfigRoutes = require('./src/routes/schoolConfigRoutes');
 const enquiryRoutes = require('./src/routes/enquiryRoutes');
 const scannerRoutes = require('./src/routes/scannerRoutes');
+const assignmentRoutes = require('./src/routes/assignmentRoutes');
+const { initSocket } = require('./src/services/socketService');
+const errorHandler = require('./src/middleware/errorHandler');
 
 // Initialize app
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5001;
 
 // Security middleware
@@ -56,6 +61,9 @@ const corsOptions = {
   credentials: true,
 };
 app.use(cors(corsOptions));
+
+// Initialize Socket.io
+initSocket(server, corsOptions);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -120,6 +128,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/school-config', schoolConfigRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/scanners', scannerRoutes);
+app.use('/api/assignments', assignmentRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -127,22 +136,12 @@ app.use((req, res) => {
 });
 
 // Error handler
-app.use((err, req, res, next) => {
-  logger.error('Unhandled Error:', err);
-
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal server error';
-
-  res.status(statusCode).json({
-    error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
-});
+app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`\n🚀 School ERP Server running on http://localhost:${PORT}`);
-  console.log(`🏫 School: ${process.env.SCHOOL_NAME} (${process.env.SCHOOL_ID})`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/health\n`);
+server.listen(PORT, () => {
+  logger.info(`🚀 School ERP Server running on http://localhost:${PORT}`);
+  logger.info(`🏫 School: ${process.env.SCHOOL_NAME} (${process.env.SCHOOL_ID})`);
+  logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
+  logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
 });

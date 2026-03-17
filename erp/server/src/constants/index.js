@@ -4,7 +4,7 @@
 
 const ROLES = {
   SUPER_ADMIN: 'SUPER_ADMIN',
-  ADMIN: 'ADMIN',
+  ADMIN: 'ADMIN',           // Also represents Principal
   TEACHER: 'TEACHER',
   STUDENT: 'STUDENT',
   PARENT: 'PARENT',
@@ -12,9 +12,15 @@ const ROLES = {
   ACCOUNTANT: 'ACCOUNTANT',
   HR_MANAGER: 'HR_MANAGER',
   ADMISSION_MANAGER: 'ADMISSION_MANAGER',
-  PRINCIPAL: 'PRINCIPAL',
-  HOD: 'HOD',
+  INVENTORY_MANAGER: 'INVENTORY_MANAGER',
+  STAFF: 'STAFF',
 };
+
+/**
+ * Roles that can be assigned to users (single source of truth).
+ * Used by authController, userController, and any validation logic.
+ */
+const VALID_ROLES = Object.values(ROLES);
 
 const ATTENDANCE_STATUS = {
   PRESENT: 'PRESENT',
@@ -47,6 +53,7 @@ const DEFAULTS = {
 
 module.exports = {
   ROLES,
+  VALID_ROLES,
   ATTENDANCE_STATUS,
   EXAM_STATUS,
   DEFAULTS,

@@ -86,13 +86,13 @@ export function TopAnnouncementBar() {
     return (
         <>
             <div
-                className="w-full bg-slate-900 overflow-hidden py-2 border-b border-slate-700 relative z-50 flex items-center"
+                className="w-full bg-primary overflow-hidden py-2 border-b border-primary/20 relative z-50 flex items-center shadow-lg"
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >
-                <div className="absolute left-0 top-0 bottom-0 bg-slate-900 z-10 px-4 flex items-center border-r border-slate-700 shadow-lg">
-                    <BellRing className="h-4 w-4 text-blue-400 mr-2" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Updates</span>
+                <div className="absolute left-0 top-0 bottom-0 bg-primary z-10 px-4 flex items-center border-r border-white/20">
+                    <BellRing className="h-4 w-4 text-white mr-2" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/90">Updates</span>
                 </div>
 
                 <motion.div
@@ -126,15 +126,15 @@ export function TopAnnouncementBar() {
                                 {getPriorityIcon(ann.priority)}
                                 {ann.priority}
                             </span>
-                            <span className="text-sm font-medium text-slate-200 group-hover:text-blue-400 underline-offset-4 group-hover:underline transition-all">
+                            <span className="text-sm font-bold text-white group-hover:text-white/80 transition-all">
                                 {ann.title}
                             </span>
-                            <span className="text-xs text-slate-500">•</span>
+                            <span className="text-xs text-white/40">•</span>
                         </button>
                     ))}
                 </motion.div>
 
-                <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-slate-900 to-transparent pointer-events-none z-10" />
+                <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-primary to-transparent pointer-events-none z-10" />
             </div>
 
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

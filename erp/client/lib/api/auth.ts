@@ -75,4 +75,9 @@ export const authAPI = {
     if (typeof window === 'undefined') return false;
     return !!localStorage.getItem('auth_token');
   },
+
+  getProfile: async (): Promise<{ user: User }> => {
+    const { data } = await apiClient.get('/auth/me');
+    return data;
+  },
 };

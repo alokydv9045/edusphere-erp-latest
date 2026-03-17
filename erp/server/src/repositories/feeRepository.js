@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const crypto = require('crypto');
+const logger = require('../config/logger');
 
 // Generate a unique receipt/refund number that is safe under concurrency
 const generateUniqueId = (prefix) => `${prefix}${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
@@ -8,13 +9,11 @@ class FeeRepository {
     /**
      * Find fee structures with filtering
      */
-    async findFeeStructures(where) {
+    async findFeeStructures(where, include = { items: true }) {
         return prisma.feeStructure.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: {
-                items: true,
-            },
+            include,
         });
     }
 
@@ -59,7 +58,7 @@ class FeeRepository {
 
             return [enrichedStudents, total];
         } catch (err) {
-            console.error('[feeRepository] Error fetching fee students:', err.message);
+            logger.error(`[feeRepository] Error fetching fee students: ${err.message}`);
             return [[], 0];
         }
     }
@@ -322,7 +321,7 @@ class FeeRepository {
         } catch (err) {
             // Prisma client hasn't been regenerated yet — return empty array
             // Run: cd server && npx prisma generate
-            console.error('[feeRepository] studentFeeLedger unavailable:', err.message);
+            logger.error(`[feeRepository] studentFeeLedger unavailable: ${err.message}`);
             return [];
         }
     }
@@ -525,7 +524,7 @@ class FeeRepository {
                 },
             });
         } catch (err) {
-            console.error('[feeRepository] studentFeeLedger unavailable for stats:', err.message);
+            logger.error(`[feeRepository] studentFeeLedger unavailable for stats: ${err.message}`);
         }
 
         return [monthlyCollection, pendingTotal, topDefaulters];

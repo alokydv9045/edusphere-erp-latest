@@ -1,4 +1,5 @@
 const cloudinary = require('cloudinary').v2;
+const logger = require('./logger');
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -20,7 +21,7 @@ const uploadToCloudinary = async (filePath, folder = 'edusphere') => {
         });
         return result;
     } catch (error) {
-        console.error('Cloudinary upload error:', error);
+        logger.error('Cloudinary upload error:', error);
         throw new Error('Failed to upload to Cloudinary');
     }
 };
@@ -35,7 +36,7 @@ const deleteFromCloudinary = async (publicId) => {
         const result = await cloudinary.uploader.destroy(publicId);
         return result;
     } catch (error) {
-        console.error('Cloudinary delete error:', error);
+        logger.error('Cloudinary delete error:', error);
         throw new Error('Failed to delete from Cloudinary');
     }
 };

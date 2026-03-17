@@ -1,4 +1,5 @@
 const prisma = require('../config/database');
+const logger = require('../config/logger');
 
 /**
  * Utility to get configuration values from the database with fallbacks to environment variables or defaults.
@@ -27,7 +28,7 @@ async function getConfigValue(key, fallback) {
         // 3. Use provided fallback
         return fallback;
     } catch (error) {
-        console.error(`Error fetching config for ${key}:`, error);
+        logger.error(`Error fetching config for ${key}:`, error);
         return fallback;
     }
 }

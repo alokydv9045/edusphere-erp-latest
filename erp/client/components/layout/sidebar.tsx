@@ -40,6 +40,8 @@ const navigationConfig = [
   { name: 'Teachers', href: '/dashboard/teachers', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { name: 'HR Management', href: '/dashboard/hr', icon: Briefcase, roles: ['SUPER_ADMIN', 'ADMIN', 'HR_MANAGER'] },
   { name: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+  { name: 'Assignments', href: '/dashboard/academic/assignments', icon: ClipboardCheck, roles: ['TEACHER'] },
+  { name: 'Assignments', href: '/dashboard/assignments', icon: ClipboardCheck, roles: ['STUDENT'] },
   { name: 'QR Scanners', href: '/dashboard/scanners', icon: QrCode, roles: ['SUPER_ADMIN', 'ADMIN', 'HR_MANAGER'] },
   { name: 'Academic', href: '/dashboard/academic', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT'] },
   { name: 'Fees', href: '/dashboard/fees', icon: DollarSign, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'STUDENT'] },
@@ -99,7 +101,12 @@ export function Sidebar({ className }: { className?: string }) {
     });
   }
 
-  const navigation = dynamicNav.filter(item =>
+  const navigation = dynamicNav.map(item => {
+    if (item.name === 'Attendance' && userRoles.includes('STUDENT')) {
+      return { ...item, href: '/dashboard/attendance/student' };
+    }
+    return item;
+  }).filter(item =>
     userRoles.some((role) => item.roles.includes(role as any))
   );
 

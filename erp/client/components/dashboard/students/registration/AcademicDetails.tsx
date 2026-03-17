@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { StudentRegistrationValues } from "@/lib/validators/student";
-import { academicAPI } from "@/lib/api";
+import { useAcademicData } from "@/hooks/useAcademicData";
 import {
     FormControl,
     FormField,
@@ -29,50 +28,14 @@ interface AcademicDetailsProps {
 }
 
 export default function AcademicDetails({ form, onNext, onPrev }: AcademicDetailsProps) {
-    const [classes, setClasses] = useState<any[]>([]);
-    const [sections, setSections] = useState<any[]>([]);
-    const [academicYears, setAcademicYears] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
-
     const selectedClassId = form.watch("classId");
-
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                const classesData = await academicAPI.getClasses();
-                setClasses(classesData.classes || []);
-
-                // Mock academic years if API is missing, or fetch if available
-                // For now, hardcoding or fetching if endpoint exists.
-                // Assuming we need to fetch academic years, but let's just mock for now as per current API client limits
-                const yearsData = await academicAPI.getAcademicYears();
-                setAcademicYears(yearsData.years || []);
-
-            } catch (error) {
-                console.error("Failed to fetch academic data", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
-
-    useEffect(() => {
-        const fetchSections = async () => {
-            if (selectedClassId) {
-                try {
-                    const sectionsData = await academicAPI.getSections({ classId: selectedClassId });
-                    setSections(sectionsData.sections || []);
-                } catch (error) {
-                    console.error("Failed to fetch sections", error);
-                }
-            } else {
-                setSections([]);
-            }
-        };
-        fetchSections();
-    }, [selectedClassId]);
+    
+    const { 
+        classes, 
+        sections, 
+        academicYears, 
+        loading 
+    } = useAcademicData(selectedClassId);
 
     return (
         <Card>
@@ -126,7 +89,7 @@ export default function AcademicDetails({ form, onNext, onPrev }: AcademicDetail
                                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select Academic Year" />
+                                            <SelectValue placeholder={loading ? "Loading..." : "Select Academic Year"} />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
@@ -174,7 +137,7 @@ export default function AcademicDetails({ form, onNext, onPrev }: AcademicDetail
                                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select Class" />
+                                            <SelectValue placeholder={loading ? "Loading..." : "Select Class"} />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
@@ -194,10 +157,10 @@ export default function AcademicDetails({ form, onNext, onPrev }: AcademicDetail
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Section <span className="text-red-500">*</span></FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!selectedClassId}>
+                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!selectedClassId || loading}>
                                     <FormControl>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select Section" />
+                                            <SelectValue placeholder={!selectedClassId ? "Select Class first" : (loading ? "Loading..." : "Select Section")} />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>

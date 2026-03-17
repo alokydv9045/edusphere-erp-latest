@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/database');
 const asyncHandler = require('../utils/asyncHandler');
+const { VALID_ROLES } = require('../constants');
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -15,8 +16,6 @@ const generateToken = (user) => {
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };
-
-const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'LIBRARIAN', 'ACCOUNTANT', 'HR_MANAGER', 'ADMISSION_MANAGER'];
 
 const register = asyncHandler(async (req, res) => {
   const { email, password, firstName, lastName, role, roles: rolesFromBody, phone } = req.body;

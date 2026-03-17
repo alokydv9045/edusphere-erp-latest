@@ -1,4 +1,5 @@
 const QRCode = require('qrcode');
+const { getConfigValue } = require('./configHelper');
 
 /**
  * Generates a base64 PNG QR code encoding the userId.
@@ -6,13 +7,14 @@ const QRCode = require('qrcode');
  * Returns a data URL: "data:image/png;base64,..."
  */
 const generateUserQR = async (userId) => {
+  const brandColor = await getConfigValue('brand_color', '#1a1a2e');
   const payload = JSON.stringify({ uid: userId, v: 1 });
   const dataUrl = await QRCode.toDataURL(payload, {
     width: 350,
     margin: 2,
     errorCorrectionLevel: 'H',
     color: {
-      dark: '#1a1a2e',
+      dark: brandColor,
       light: '#ffffff',
     },
   });

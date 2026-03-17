@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { scannerAPI, attendanceAPI, userAPI } from '@/lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+
 const PREVIEW_SECONDS = 2;
 
 interface ScanUser {
@@ -92,9 +93,7 @@ function LiveScanContent() {
 
     // ── Load scanner info ───────────────────────────────────────────────
     useEffect(() => {
-        const token = localStorage.getItem('auth_token');
-        fetch(`${API}/scanners/${scannerId}`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.json())
+        scannerAPI.getById(scannerId)
             .then(d => { if (d.success) setScanner(d.scanner); })
             .catch(() => toast.error('Failed to load scanner'))
             .finally(() => setScannerLoading(false));
@@ -115,63 +114,52 @@ function LiveScanContent() {
     const submitAttendance = useCallback(async (qrPayload: string) => {
         const pos = posRef.current;
         try {
-            const res = await fetch(`${API}/attendance/qr-scan`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-                },
-                body: JSON.stringify({
-                    qrPayload, scannerId,
-                    scanLat: pos?.lat ?? null,
-                    scanLng: pos?.lng ?? null,
-                    // Session parameters
-                    action: sessionAction,
-                    date: sessionDate,
-                }),
+            const data = await attendanceAPI.qrScan({
+                qrPayload, scannerId,
+                scanLat: pos?.lat ?? null,
+                scanLng: pos?.lng ?? null,
+                // Session parameters
+                action: sessionAction,
+                date: sessionDate,
             });
-            const data = await res.json();
 
-            if (!res.ok) {
-                setFlash({ type: 'error', message: data.error || 'Scan rejected' });
-                setLiveFeed(prev => {
-                    // Dedup: skip if the last error is identical within 5s
-                    const last = prev[0];
-                    if (last?.isError && last.message === data.error &&
-                        Date.now() - parseInt(last.id) < 5000) return prev;
-                    return [{
-                        id: Date.now().toString(), action: 'error',
-                        userName: '—', userRole: '',
-                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        distanceMetres: data.distanceMetres, isError: true, message: data.error,
-                    }, ...prev].slice(0, 50);
-                });
-            } else {
-                const label = data.action === 'checkin' ? 'Check-In' : 'Check-Out';
-                const userName = `${data.user?.firstName} ${data.user?.lastName}`;
-                setFlash({ type: 'success', message: `${label} — ${userName}` });
-                setLiveFeed(prev => {
-                    // Dedup: skip if the same user+action was added within 5s
-                    const last = prev[0];
-                    if (!last?.isError && last?.userName === userName &&
-                        last?.action === data.action &&
-                        Date.now() - parseInt(last.id) < 5000) return prev;
-                    return [{
-                        id: Date.now().toString(), action: data.action,
-                        userName,
-                        userRole: data.user?.role ?? '',
-                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        distanceMetres: data.distanceMetres, isError: false,
-                    }, ...prev].slice(0, 50);
-                });
-            }
-        } catch {
-            setFlash({ type: 'error', message: 'Network error, try again.' });
+            const label = data.action === 'checkin' ? 'Check-In' : 'Check-Out';
+            const userName = `${data.user?.firstName} ${data.user?.lastName}`;
+            setFlash({ type: 'success', message: `${label} — ${userName}` });
+            setLiveFeed(prev => {
+                // Dedup: skip if the same user+action was added within 5s
+                const last = prev[0];
+                if (!last?.isError && last?.userName === userName &&
+                    last?.action === data.action &&
+                    Date.now() - parseInt(last.id) < 5000) return prev;
+                return [{
+                    id: Date.now().toString(), action: data.action,
+                    userName,
+                    userRole: data.user?.role ?? '',
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    distanceMetres: data.distanceMetres, isError: false,
+                }, ...prev].slice(0, 50);
+            });
+        } catch (err: any) {
+            const errorMsg = err.response?.data?.error || 'Scan rejected';
+            setFlash({ type: 'error', message: errorMsg });
+            setLiveFeed(prev => {
+                // Dedup: skip if the last error is identical within 5s
+                const last = prev[0];
+                if (last?.isError && last.message === errorMsg &&
+                    Date.now() - parseInt(last.id) < 5000) return prev;
+                return [{
+                    id: Date.now().toString(), action: 'error',
+                    userName: '—', userRole: '',
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    distanceMetres: err.response?.data?.distanceMetres, isError: true, message: errorMsg,
+                }, ...prev].slice(0, 50);
+            });
         }
 
         // Reset scan gate after a delay so camera can accept next person
         setTimeout(() => { setFlash(null); scanningRef.current = false; }, 3000);
-    }, [scannerId]);
+    }, [scannerId, sessionAction, sessionDate]);
 
     // ── Cancel preview ──────────────────────────────────────────────────
     const cancelPreview = useCallback(() => {
@@ -198,10 +186,8 @@ function LiveScanContent() {
             const userId = parsed?.uid;
             if (!userId) throw new Error('invalid');
 
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(`${API}/users/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
-            const data = await res.json();
-            const u = data.user || data;
+            const data = await userAPI.getById(userId);
+            const u = data;
 
             setPreviewUser({ id: userId, firstName: u.firstName, lastName: u.lastName, role: u.role, avatar: u.avatar });
             setPreviewQrPayload(qrPayload);
@@ -279,7 +265,7 @@ function LiveScanContent() {
                 qr.stop().then(() => qr.clear?.()).catch(() => { });
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [onQRDecoded]);
 
     // ── Loading / error states ──────────────────────────────────────────

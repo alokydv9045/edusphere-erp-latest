@@ -8,9 +8,14 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and normalize paths
 apiClient.interceptors.request.use(
   (config) => {
+    // Normalize URL to prevent double /api prefix
+    if (config.url && config.url.startsWith('/api/')) {
+      config.url = config.url.replace(/^\/api/, '');
+    }
+
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('auth_token');
       if (token) {

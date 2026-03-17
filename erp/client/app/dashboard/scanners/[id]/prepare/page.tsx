@@ -9,9 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { academicAPI } from '@/lib/api';
+import { scannerAPI } from '@/lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+
 
 interface Scanner {
     id: string;
@@ -31,9 +31,7 @@ export default function PrepareScanPage() {
     const [action, setAction] = useState<'checkin' | 'checkout'>('checkin');
 
     useEffect(() => {
-        const token = localStorage.getItem('auth_token');
-        fetch(`${API}/scanners/${scannerId}`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.json())
+        scannerAPI.getById(scannerId)
             .then(d => {
                 if (d.success) {
                     setScanner(d.scanner);

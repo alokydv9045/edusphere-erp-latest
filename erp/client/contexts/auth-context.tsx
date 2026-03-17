@@ -19,9 +19,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const currentUser = authAPI.getCurrentUser();
-    setUser(currentUser);
-    setIsLoading(false);
+    const validateSession = async () => {
+      const storedUser = authAPI.getCurrentUser();
+      if (!storedUser) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // Bug #15 fix: Validate token with server instead of trusting localStorage
+        const profileRes = await authAPI.getProfile();
+        if (profileRes?.user) {
+          setUser(profileRes.user);
+        } else {
+          setUser(storedUser); // Fallback to cached user
+        }
+      } catch {
+        // Token expired or revoked — clear session
+        authAPI.logout();
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    validateSession();
   }, []);
 
   const login = async (email: string, password: string) => {

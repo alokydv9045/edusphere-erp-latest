@@ -1,7 +1,10 @@
 const feeService = require('../services/feeService');
+const { emitEvent } = require('../services/socketService');
 const studentRepo = require('../repositories/studentRepository');
 const asyncHandler = require('../utils/asyncHandler');
 const NotFoundError = require('../errors/NotFoundError');
+const { generateFeeStatementPDF } = require('../utils/feeStatementGenerator');
+const prisma = require('../config/database');
 
 // Get fee structures
 const getFeeStructures = asyncHandler(async (req, res) => {
@@ -60,6 +63,19 @@ const createFeePayment = asyncHandler(async (req, res) => {
     message: 'Fee payment recorded successfully',
     payment,
   });
+
+  // Emit real-time event
+  emitEvent('FEE_PAYMENT_CREATED', {
+    amount: payment.amount,
+    studentId: payment.studentId,
+    paymentDate: payment.paymentDate,
+    status: payment.status
+  }, 'ADMIN');
+  
+  emitEvent('FEE_PAYMENT_CREATED', {
+    amount: payment.amount,
+    paymentDate: payment.paymentDate
+  }, 'ACCOUNTANT');
 });
 
 // Get student fee status
@@ -130,4 +146,42 @@ module.exports = {
   processRefund,
   getAdjustments,
   getFeeStats,
+  downloadFeeStatement: asyncHandler(async (req, res) => {
+    let { id } = req.params;
+    
+    // If id is 'me', use the authenticated student's ID
+    if (id === 'me' && req.user.role === 'STUDENT') {
+      const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
+      if (!student) return res.status(404).json({ error: 'Student profile not found' });
+      id = student.id;
+    }
+
+    const feeStatus = await feeService.getStudentFeeStatus(id);
+    
+    // Fetch branding config
+    const brandingEntries = await prisma.schoolBranding.findMany();
+    const brandingMap = {};
+    brandingEntries.forEach(e => { brandingMap[e.key] = e.value; });
+
+    const pdfData = {
+      student: {
+        name: feeStatus.student.user ? `${feeStatus.student.user.firstName} ${feeStatus.student.user.lastName}` : 'Student',
+        admissionNo: feeStatus.student.admissionNumber,
+        class: feeStatus.student.currentClass?.name,
+        section: feeStatus.student.section?.name,
+      },
+      ledgers: feeStatus.ledgers,
+      summary: feeStatus.summary,
+      schoolConfig: {
+        schoolName: brandingMap.school_name || process.env.SCHOOL_NAME,
+        logoPath: brandingMap.school_logo || null,
+      },
+    };
+
+    const pdfBuffer = await generateFeeStatementPDF(pdfData);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=FeeStatement_${pdfData.student.admissionNo}.pdf`);
+    res.send(pdfBuffer);
+  }),
 };

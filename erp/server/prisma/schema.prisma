@@ -164,6 +164,8 @@ model Student {
   feeLedgers        StudentFeeLedger[]
   feeAdjustments    FeeAdjustment[]
   libraryIssues     LibraryIssue[]
+  libraryReservations LibraryReservation[]
+  assignmentSubmissions AssignmentSubmission[]
 
   @@index([admissionNumber])
   @@index([currentClassId])
@@ -301,6 +303,8 @@ model Teacher {
   // Relations
   timetableSlots    TimetableSlot[]
   examInvigilators  ExamInvigilator[]
+  libraryReservations LibraryReservation[]
+  assignments       Assignment[]
 
   @@index([employeeId])
   @@index([userId])
@@ -394,6 +398,8 @@ model Class {
   exams             Exam[]
   attendanceSlots   AttendanceSlot[]
   enquiries         Enquiry[]
+  feeStructures     FeeStructure[]
+  assignments       Assignment[]
 
   @@unique([name, academicYearId])
   @@index([academicYearId])
@@ -416,6 +422,7 @@ model Section {
   students          Student[]
   timetableSlots    TimetableSlot[]
   attendanceSlots   AttendanceSlot[]
+  assignments       Assignment[]
 
   @@unique([classId, name])
   @@index([classId])
@@ -447,6 +454,9 @@ model Subject {
   teachers          SubjectTeacher[]
   timetableSlots    TimetableSlot[]
   examSubjects      ExamSubject[]
+  assignments       Assignment[]
+  attendanceSlots   AttendanceSlot[]
+  attendanceRecords AttendanceRecord[]
 
   @@index([classId])
   @@index([code])
@@ -632,6 +642,9 @@ model AttendanceSlot {
   section     Section?   @relation(fields: [sectionId], references: [id])
   sectionId   String?
 
+  subject     Subject?   @relation(fields: [subjectId], references: [id])
+  subjectId   String?
+
   createdBy   String               // User ID of creator
   status      SlotStatus @default(OPEN)
   closedAt    DateTime?
@@ -642,9 +655,10 @@ model AttendanceSlot {
   // Relations
   records     AttendanceRecord[]
 
-  @@unique([date, attendeeType, classId, sectionId])
+  @@unique([date, attendeeType, classId, sectionId, subjectId])
   @@index([createdBy, date])
   @@index([classId, date])
+  @@index([subjectId])
 }
 
 enum SlotStatus {
@@ -678,6 +692,9 @@ model AttendanceRecord {
   scannedByQR       Boolean      @default(false)
   scanner           QRScanner?   @relation(fields: [scannerId], references: [id])
   scannerId         String?      // QRScanner id
+
+  subject           Subject?     @relation(fields: [subjectId], references: [id])
+  subjectId         String?
 
   // GPS coordinates captured at scan time (audit trail)
   scanLatitude      Float?
@@ -1033,10 +1050,11 @@ model FeeStructure {
   description       String?
 
   // Applicable to
-  classId           String?  // If null, applies to all
-  
   academicYear      AcademicYear @relation(fields: [academicYearId], references: [id])
   academicYearId    String
+
+  class             Class?   @relation(fields: [classId], references: [id])
+  classId           String?  // If null, applies to all
 
   // Fee details
   totalAmount       Float
@@ -1248,6 +1266,69 @@ enum PaymentStatus {
   REFUNDED
 }
 
+
+// ============================================
+// ASSIGNMENT SYSTEM
+// ============================================
+
+model Assignment {
+  id                String   @id @default(uuid())
+  title             String
+  description       String?
+  filePath          String?  // Reference material path
+  dueDate           DateTime
+  
+  subject           Subject  @relation(fields: [subjectId], references: [id])
+  subjectId         String
+  
+  class             Class    @relation(fields: [classId], references: [id])
+  classId           String
+  
+  section           Section? @relation(fields: [sectionId], references: [id])
+  sectionId         String?
+  
+  teacher           Teacher  @relation(fields: [teacherId], references: [id])
+  teacherId         String
+  
+  submissions       AssignmentSubmission[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([classId])
+  @@index([subjectId])
+  @@index([teacherId])
+}
+
+model AssignmentSubmission {
+  id                String   @id @default(uuid())
+  
+  assignment        Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId      String
+  
+  student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId         String
+  
+  filePath          String?  // Submitted file path
+  status            AssignmentStatus @default(PENDING)
+  grade             String?
+  feedback          String?
+  submittedAt       DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId])
+}
+
+enum AssignmentStatus {
+  PENDING
+  SUBMITTED
+  GRADED
+  LATE
+}
+
 // ============================================
 // LIBRARY MANAGEMENT
 // ============================================
@@ -1267,6 +1348,11 @@ model Book {
   category          String
   subCategory       String?
   language          String   @default("English")
+  type              BookType @default(PHYSICAL)
+
+  // Condition & Status
+  condition         BookCondition @default(NEW)
+  status            BookStatus    @default(AVAILABLE)
 
   // Inventory
   totalCopies       Int      @default(1)
@@ -1278,7 +1364,7 @@ model Book {
   // Price
   price             Float?
 
-  // Status
+  // Status (legacy field - kept for backward compatibility if needed, but 'status' enum is preferred)
   isActive          Boolean  @default(true)
 
   // Metadata
@@ -1287,10 +1373,12 @@ model Book {
 
   // Relations
   issues            LibraryIssue[]
+  reservations      LibraryReservation[]
 
   @@index([isbn])
   @@index([category])
   @@index([title])
+  @@index([status])
 }
 
 model LibraryIssue {
@@ -1306,6 +1394,7 @@ model LibraryIssue {
   issueDate         DateTime @default(now())
   dueDate           DateTime
   returnDate        DateTime?
+  renewalCount      Int      @default(0)
 
   // Status
   status            IssueStatus @default(ISSUED)
@@ -1313,6 +1402,9 @@ model LibraryIssue {
   // Fine
   fineAmount        Float    @default(0)
   finePaid          Boolean  @default(false)
+
+  // Condition on return
+  conditionOnReturn String?
 
   // Issued/returned by
   issuedBy          String?  // User ID
@@ -1330,11 +1422,64 @@ model LibraryIssue {
   @@index([status])
 }
 
+model LibraryReservation {
+  id                String            @id @default(uuid())
+
+  book              Book              @relation(fields: [bookId], references: [id])
+  bookId            String
+
+  student           Student?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId         String?
+
+  teacher           Teacher?          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId         String?
+
+  reservationDate   DateTime          @default(now())
+  expiryDate        DateTime?
+  status            ReservationStatus @default(PENDING)
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([bookId])
+  @@index([studentId])
+  @@index([status])
+}
+
+enum BookType {
+  PHYSICAL
+  EBOOK
+  REFERENCE
+}
+
+enum BookCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum BookStatus {
+  AVAILABLE
+  ISSUED
+  RESERVED
+  LOST
+  WEED_OUT
+}
+
 enum IssueStatus {
   ISSUED
   RETURNED
   OVERDUE
   LOST
+}
+
+enum ReservationStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+  EXPIRED
 }
 
 // ============================================
@@ -1529,6 +1674,7 @@ model ServiceRequest {
   
   // Certifications/Other specifics (optional)
   attachmentUrl     String?
+  metadata          String?  // JSON string for additional details (e.g. leaveType)
   
   // Status tracking
   status            ServiceRequestStatus @default(PENDING)
