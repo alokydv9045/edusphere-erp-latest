@@ -12,9 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
+export function Header({ onMenuClick, className }: { onMenuClick?: () => void; className?: string }) {
   return (
-    <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 shrink-0">
+    <header className={`flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 shrink-0 ${className || ''}`}>
       {onMenuClick && (
         <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
           <Menu className="h-5 w-5" />

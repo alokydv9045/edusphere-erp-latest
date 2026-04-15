@@ -7,7 +7,7 @@ const asyncHandler = require('../utils/asyncHandler');
  */
 const getDashboardStats = asyncHandler(async (req, res) => {
   const stats = await DashboardService.getDashboardStats(req.user.role, req.user.userId);
-  res.json({ success: true, stats });
+  res.status(200).json({ success: true, stats });
 });
 
 /**
@@ -16,7 +16,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
 const getRecentActivities = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const activities = await DashboardService.getRecentActivities(req.user.role, req.user.userId, limit);
-  res.json({ success: true, activities });
+  res.status(200).json({ success: true, activities });
 });
 
 /**
@@ -25,7 +25,7 @@ const getRecentActivities = asyncHandler(async (req, res) => {
 const getUpcomingExams = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const exams = await DashboardService.getUpcomingExams(req.user.userId, req.user.role, limit);
-  res.json({ success: true, exams });
+  res.status(200).json({ success: true, exams });
 });
 
 /**
@@ -33,7 +33,7 @@ const getUpcomingExams = asyncHandler(async (req, res) => {
  */
 const getFeeCollectionSummary = asyncHandler(async (req, res) => {
   const summary = await DashboardService.getFeeCollectionSummary();
-  res.json({ success: true, summary });
+  res.status(200).json({ success: true, summary });
 });
 
 /**
@@ -41,7 +41,7 @@ const getFeeCollectionSummary = asyncHandler(async (req, res) => {
  */
 const getInventoryAlerts = asyncHandler(async (req, res) => {
   const alerts = await DashboardService.getInventoryAlerts();
-  res.json({ success: true, ...alerts });
+  res.status(200).json({ success: true, ...alerts });
 });
 
 /**
@@ -58,7 +58,7 @@ const getAccountantStats = asyncHandler(async (req, res) => {
 const getAttendanceTrend = asyncHandler(async (req, res) => {
   const { classId, studentId } = req.query;
   const trend = await DashboardService.getAttendanceTrend(classId, studentId);
-  res.json({ success: true, trend });
+  res.status(200).json({ success: true, trend });
 });
 
 /**

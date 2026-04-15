@@ -8,7 +8,10 @@ const createPerformanceReview = asyncHandler(async (req, res) => {
     const reviewerId = req.user.userId;
 
     if (!employeeId || !periodStart || !periodEnd || !ratings) {
-        return res.status(400).json({ error: 'Required fields missing' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required fields missing' 
+        });
     }
 
     const review = await prisma.performanceReview.create({
@@ -25,7 +28,11 @@ const createPerformanceReview = asyncHandler(async (req, res) => {
         }
     });
 
-    res.status(201).json({ message: 'Performance review submitted', review });
+    res.status(201).json({ 
+        success: true,
+        message: 'Performance review submitted', 
+        review 
+    });
 });
 
 // Get reviews for an employee (self view or manager view)
@@ -35,7 +42,10 @@ const getEmployeeReviews = asyncHandler(async (req, res) => {
 
     // Security check: Teachers can only view their own reviews
     if (role === 'TEACHER' && employeeId !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
+        return res.status(403).json({ 
+            success: false,
+            message: 'Access denied' 
+        });
     }
 
     const reviews = await prisma.performanceReview.findMany({
@@ -46,7 +56,10 @@ const getEmployeeReviews = asyncHandler(async (req, res) => {
         orderBy: { reviewDate: 'desc' }
     });
 
-    res.json({ reviews });
+    res.status(200).json({ 
+        success: true,
+        reviews 
+    });
 });
 
 // Ack review (Employee)
@@ -56,7 +69,10 @@ const acknowledgeReview = asyncHandler(async (req, res) => {
 
     const review = await prisma.performanceReview.findUnique({ where: { id } });
     if (!review || review.employeeId !== userId) {
-        return res.status(404).json({ error: 'Review not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Review not found' 
+        });
     }
 
     const updated = await prisma.performanceReview.update({
@@ -64,7 +80,11 @@ const acknowledgeReview = asyncHandler(async (req, res) => {
         data: { status: 'ACKNOWLEDGED' }
     });
 
-    res.json({ message: 'Review acknowledged', review: updated });
+    res.status(200).json({ 
+        success: true,
+        message: 'Review acknowledged', 
+        review: updated 
+    });
 });
 
 module.exports = {

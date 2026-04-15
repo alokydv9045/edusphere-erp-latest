@@ -50,7 +50,10 @@ const getConfig = asyncHandler(async (req, res) => {
         configMap.school_name = process.env.SCHOOL_NAME || '';
     }
 
-    res.json({ config: configMap });
+    res.status(200).json({ 
+        success: true,
+        config: configMap 
+    });
 });
 
 /**
@@ -61,12 +64,18 @@ const uploadLogo = asyncHandler(async (req, res) => {
     return new Promise((resolve, reject) => {
         upload(req, res, async (err) => {
             if (err) {
-                return res.status(400).json({ error: err.message });
+                return res.status(400).json({ 
+                    success: false,
+                    message: err.message 
+                });
             }
             
             try {
                 if (!req.file) {
-                    return res.status(400).json({ error: 'No file uploaded' });
+                    return res.status(400).json({ 
+                        success: false,
+                        message: 'No file uploaded' 
+                    });
                 }
 
                 // Store relative path for serving via static middleware
@@ -88,14 +97,18 @@ const uploadLogo = asyncHandler(async (req, res) => {
                     }
                 });
 
-                res.json({
+                res.status(200).json({
+                    success: true,
                     message: 'Logo uploaded successfully',
                     logoUrl: logoPath,
                 });
                 resolve();
             } catch (error) {
                 logger.error('Upload logo error:', error);
-                res.status(500).json({ error: 'Failed to upload logo' });
+                res.status(500).json({ 
+                    success: false,
+                    message: 'Failed to upload logo' 
+                });
                 resolve();
             }
         });
@@ -111,7 +124,10 @@ const updateConfig = asyncHandler(async (req, res) => {
     const { key, value } = req.body;
 
     if (!key || value === undefined) {
-        return res.status(400).json({ error: 'key and value are required' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'key and value are required' 
+        });
     }
 
     const config = await prisma.schoolBranding.upsert({
@@ -120,7 +136,11 @@ const updateConfig = asyncHandler(async (req, res) => {
         update: { value: String(value) },
     });
 
-    res.json({ message: 'Config updated', config });
+    res.status(200).json({ 
+        success: true,
+        message: 'Config updated', 
+        config 
+    });
 });
 
 module.exports = { getConfig, uploadLogo, updateConfig };

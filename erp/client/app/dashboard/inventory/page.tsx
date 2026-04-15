@@ -51,7 +51,7 @@ export default function InventoryPage() {
   useEffect(() => {
     if (socket) {
       const handleUpdate = () => {
-        console.log('Inventory update received, refreshing list...');
+        // fetchItems() is called automatically on socket updates to keep the UI in sync
         fetchItems();
       };
 

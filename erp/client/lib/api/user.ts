@@ -12,9 +12,18 @@ export interface User {
   isActive: boolean;
   emailVerified: boolean;
   lastLogin?: string;
+  lastPasswordChange?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  bloodGroup?: string;
+  address?: string;
+  qrCode?: string;
+  qrIssued?: boolean;
+  qrIssuedAt?: string | null;
   createdAt: string;
   student?: any;
   teacher?: any;
+  staff?: any;
 }
 
 export interface CreateUserData {
@@ -81,6 +90,21 @@ export const userAPI = {
     const { data } = await apiClient.patch(`/users/${id}/avatar`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return data;
+  },
+
+  changePassword: async (data: any): Promise<any> => {
+    const res = await apiClient.post('/users/me/change-password', data);
+    return res.data;
+  },
+
+  toggleQRIssued: async (id: string, issued: boolean): Promise<any> => {
+    const { data } = await apiClient.post(`/users/${id}/qr/status`, { issued });
+    return data;
+  },
+
+  regenerateQR: async (id: string): Promise<any> => {
+    const { data } = await apiClient.post(`/users/${id}/qr/regenerate`);
     return data;
   },
 };

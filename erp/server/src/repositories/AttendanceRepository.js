@@ -1,4 +1,5 @@
 const prisma = require('../config/database');
+const { ROLES } = require('../constants');
 
 /**
  * Repository for Attendance related database operations
@@ -9,9 +10,9 @@ class AttendanceRepository {
         if (attendeeType === ROLES.STUDENT) where.studentId = entityId;
         else if (attendeeType === ROLES.TEACHER) where.teacherId = entityId;
         else if (attendeeType === ROLES.STAFF) where.staffId = entityId;
-        
+
         if (subjectId) where.subjectId = subjectId;
-        
+
         return prisma.attendanceRecord.findFirst({ where });
     }
 
@@ -102,6 +103,24 @@ class AttendanceRepository {
         });
     }
 
+    async upsertAttendanceSlot(data) {
+        const { date, attendeeType, classId, sectionId, subjectId } = data;
+        return prisma.attendanceSlot.upsert({
+            where: {
+                date_attendeeType_classId_sectionId_subjectId: {
+                    date,
+                    attendeeType,
+                    classId: classId || null,
+                    sectionId: sectionId || null,
+                    subjectId: subjectId || null
+                }
+            },
+            update: {}, // Do nothing if it exists
+            create: data,
+            include: { class: true, section: true, subject: true }
+        });
+    }
+
     async deleteAttendanceSlot(id) {
         return prisma.attendanceSlot.delete({ where: { id } });
     }
@@ -159,7 +178,7 @@ class AttendanceRepository {
     async findStaffByUserId(userId) {
         return prisma.staff.findUnique({ where: { userId } });
     }
-    
+
     async findUserById(id) {
         return prisma.user.findUnique({
             where: { id },

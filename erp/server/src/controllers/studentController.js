@@ -12,7 +12,10 @@ const { generateAttendanceReportPDF } = require('../utils/attendanceReportGenera
 const getStudents = asyncHandler(async (req, res) => {
   const result = await studentService.getStudents(req.query);
 
-  res.status(200).json(result);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
 });
 
 /**
@@ -22,7 +25,10 @@ const getStudents = asyncHandler(async (req, res) => {
 const getStudent = asyncHandler(async (req, res) => {
   const student = await studentService.getStudentById(req.params.id);
 
-  res.status(200).json({ student });
+  res.status(200).json({
+    success: true,
+    student
+  });
 });
 
 /**
@@ -33,6 +39,7 @@ const createStudent = asyncHandler(async (req, res) => {
   const student = await studentService.createStudent(req.body);
 
   res.status(201).json({
+    success: true,
     message: 'Student created successfully',
     student,
   });
@@ -53,6 +60,7 @@ const updateStudent = asyncHandler(async (req, res) => {
   const student = await studentService.updateStudent(req.params.id, req.body);
 
   res.status(200).json({
+    success: true,
     message: 'Student updated successfully',
     student,
   });
@@ -65,7 +73,10 @@ const updateStudent = asyncHandler(async (req, res) => {
 const deleteStudent = asyncHandler(async (req, res) => {
   await studentService.deleteStudent(req.params.id);
 
-  res.status(200).json({ message: 'Student deleted successfully' });
+  res.status(200).json({ 
+    success: true,
+    message: 'Student deleted successfully' 
+  });
 });
 
 /**
@@ -76,7 +87,10 @@ const getStudentAttendance = asyncHandler(async (req, res) => {
   const { startDate, endDate } = req.query;
   const result = await studentService.getStudentAttendance(req.params.id, startDate, endDate);
 
-  res.status(200).json(result);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
 });
 
 /**
@@ -112,7 +126,10 @@ const getMeStudent = asyncHandler(async (req, res) => {
     throw new NotFoundError('Student profile not found for this user');
   }
 
-  res.status(200).json({ student });
+  res.status(200).json({
+    success: true,
+    student
+  });
 });
 
 /**
@@ -144,6 +161,7 @@ const updateMeStudent = asyncHandler(async (req, res) => {
   const updatedStudent = await studentService.updateStudent(student.id, allowedUpdates);
 
   res.status(200).json({
+    success: true,
     message: 'Profile updated successfully',
     student: updatedStudent,
   });

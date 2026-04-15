@@ -92,7 +92,7 @@ export default function LibraryPage() {
   useEffect(() => {
     if (socket) {
       const handleUpdate = () => {
-        console.log('Library update received, refreshing data...');
+        // Triggered by socket: LIBRARY_BOOK_CREATED, LIBRARY_BOOK_UPDATED, LIBRARY_BOOK_ISSUED, LIBRARY_BOOK_RETURNED
         fetchData();
       };
 

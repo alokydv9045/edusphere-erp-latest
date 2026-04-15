@@ -25,6 +25,23 @@ const initSocket = (server, corsOptions) => {
       logger.info(`Socket ${socket.id} joined ${roomName}`);
     });
 
+    socket.on('join_trip', (data) => {
+      const roomName = `trip_${data.tripId}`;
+      socket.join(roomName);
+      logger.info(`Socket ${socket.id} joined ${roomName}`);
+    });
+
+    socket.on('leave_room', (roomName) => {
+      socket.leave(roomName);
+      logger.info(`Socket ${socket.id} left ${roomName}`);
+    });
+
+    socket.on('leave_trip', (data) => {
+      const roomName = `trip_${data.tripId}`;
+      socket.leave(roomName);
+      logger.info(`Socket ${socket.id} left ${roomName}`);
+    });
+
     socket.on('disconnect', () => {
       logger.info(`Client disconnected: ${socket.id}`);
     });

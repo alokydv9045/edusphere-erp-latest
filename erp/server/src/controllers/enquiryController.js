@@ -31,7 +31,7 @@ const getEnquiries = asyncHandler(async (req, res) => {
         orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, enquiries });
+    res.status(200).json({ success: true, enquiries });
 });
 
 /**
@@ -80,7 +80,7 @@ const getEnquiryById = asyncHandler(async (req, res) => {
         return res.status(404).json({ success: false, message: 'Enquiry not found' });
     }
 
-    res.json({ success: true, enquiry });
+    res.status(200).json({ success: true, enquiry });
 });
 
 /**
@@ -95,7 +95,7 @@ const updateEnquiry = asyncHandler(async (req, res) => {
         data: updates
     });
 
-    res.json({ success: true, message: 'Enquiry updated successfully', enquiry });
+    res.status(200).json({ success: true, message: 'Enquiry updated successfully', enquiry });
 });
 
 /**
@@ -130,7 +130,7 @@ const addFollowUp = asyncHandler(async (req, res) => {
 const deleteEnquiry = asyncHandler(async (req, res) => {
     const { id } = req.params;
     await prisma.enquiry.delete({ where: { id } });
-    res.json({ success: true, message: 'Enquiry deleted successfully' });
+    res.status(200).json({ success: true, message: 'Enquiry deleted successfully' });
 });
 
 module.exports = {

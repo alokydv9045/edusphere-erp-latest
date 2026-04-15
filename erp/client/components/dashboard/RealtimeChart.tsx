@@ -7,7 +7,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { API_BASE_URL } from '@/lib/api/apiConfig';
+import apiClient from '@/lib/api/client';
 import { useSocket } from '@/hooks/useSocket';
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
@@ -45,15 +45,10 @@ export const RealtimeChart: React.FC<RealtimeChartProps> = ({
 
   const fetchData = async () => {
     try {
-      // Normalize URL to prevent double /api prefix
-      const normalizedEndpoint = endpoint.startsWith('/api/') ? endpoint.replace(/^\/api/, '') : endpoint;
-      const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-      const result = await response.json();
-      if (result.success) {
+      const response = await apiClient.get(endpoint);
+      const result = response.data;
+      
+      if (result.success || result.trend || result.data) {
         // Handle specific data property if provided, otherwise fallback to standard keys
         let plotData = [];
         if (dataProperty && result[dataProperty]) {
@@ -61,7 +56,7 @@ export const RealtimeChart: React.FC<RealtimeChartProps> = ({
         } else {
           plotData = result.trend || result.data || result.performance || result.marks ||
             result.categories || result.attendanceTrend || result.leaveDistribution ||
-            result.modes || result.subjectAverages || [];
+            result.modes || result.subjectAverages || result.stats || [];
         }
         setData(plotData);
       }
@@ -76,8 +71,7 @@ export const RealtimeChart: React.FC<RealtimeChartProps> = ({
     fetchData();
 
     if (socket) {
-      socket.on(socketEvent, (update: any) => {
-        console.log(`Socket update received for ${socketEvent}:`, update);
+      socket.on(socketEvent, () => {
         fetchData(); // Simplest approach for consistency
       });
     }

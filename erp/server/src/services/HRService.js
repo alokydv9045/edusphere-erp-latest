@@ -146,50 +146,56 @@ class HRService {
         const employeeId = await this.generateEmployeeId();
         const joinDate = joiningDate ? new Date(joiningDate) : new Date();
 
-        let result;
+        return await HRRepository.executeTransaction(async (tx) => {
+            let result;
 
-        if (role === 'TEACHER') {
-            const teacherData = {
-                employeeId,
-                joiningDate: joinDate,
-                qualification: qualification || '',
-                experience: experience ? parseInt(experience) : null,
-                specialization: specialization || null,
-                assignedScannerId: assignedScannerId || null,
-                user: {
-                    create: {
-                        email, password: hashedPassword, firstName, lastName,
-                        phone: phone || null, gender: gender || null,
-                        address: address || null,
-                        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-                        role: 'TEACHER', roles: ['TEACHER'],
+            if (role === 'TEACHER') {
+                const teacherData = {
+                    employeeId,
+                    joiningDate: joinDate,
+                    qualification: qualification || '',
+                    experience: experience ? parseInt(experience) : null,
+                    specialization: specialization || null,
+                    assignedScannerId: assignedScannerId || null,
+                    user: {
+                        create: {
+                            email, password: hashedPassword, firstName, lastName,
+                            phone: phone || null, gender: gender || null,
+                            address: address || null,
+                            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+                            role: 'TEACHER', roles: ['TEACHER'],
+                        },
                     },
-                },
-            };
-            result = await HRRepository.createTeacher(teacherData);
-        } else {
-            const staffData = {
-                employeeId,
-                joiningDate: joinDate,
-                designation: designation || role,
-                department: department || null,
-                assignedScannerId: assignedScannerId || null,
-                user: {
-                    create: {
-                        email, password: hashedPassword, firstName, lastName,
-                        phone: phone || null, gender: gender || null,
-                        address: address || null,
-                        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-                        role, roles: [role],
+                };
+                result = await tx.teacher.create({ 
+                    data: teacherData,
+                    include: { user: true }
+                });
+            } else {
+                const staffData = {
+                    employeeId,
+                    joiningDate: joinDate,
+                    designation: designation || role,
+                    department: department || null,
+                    assignedScannerId: assignedScannerId || null,
+                    user: {
+                        create: {
+                            email, password: hashedPassword, firstName, lastName,
+                            phone: phone || null, gender: gender || null,
+                            address: address || null,
+                            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+                            role, roles: [role],
+                        },
                     },
-                },
-            };
-            result = await HRRepository.createStaff(staffData);
-        }
+                };
+                result = await tx.staff.create({
+                    data: staffData,
+                    include: { user: true }
+                });
+            }
 
-        // Initialize leave balances
-        try {
-            const currentYear = await HRRepository.findCurrentAcademicYear();
+            // Initialize leave balances within the SAME TRANSACTION
+            const currentYear = await tx.academicYear.findFirst({ where: { isCurrent: true } });
             if (currentYear) {
                 const userId = result.user ? result.user.id : result.userId;
                 
@@ -205,20 +211,20 @@ class HRService {
 
                 await Promise.all(
                     defaultQuotas.map(q =>
-                        HRRepository.createLeaveBalance({
-                            employeeId: userId,
-                            leaveType: q.type,
-                            academicYearId: currentYear.id,
-                            total: q.total
+                        tx.leaveBalance.create({
+                            data: {
+                                employeeId: userId,
+                                leaveType: q.type,
+                                academicYearId: currentYear.id,
+                                total: q.total
+                            }
                         })
                     )
                 );
             }
-        } catch (initErr) {
-            logger.error('Failed to initialize leave balances for new employee:', initErr);
-        }
 
-        return result;
+            return result;
+        });
     }
 
     async updateEmployee(id, data) {
@@ -294,7 +300,7 @@ class HRService {
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             const count = await HRRepository.countUsersByRoles(HR_EMPLOYEE_ROLES);
             const suffix = attempt > 0 ? Math.floor(Math.random() * 100) : 0;
-            const id = `EMP${String(count + 1 + suffix).padStart(4, '0')}`;
+            const id = `EMP${String(count + 1 + suffix).padStart(5, '0')}`;
 
             const existsInTeacher = await HRRepository.findTeacherByEmployeeId(id);
             const existsInStaff = await HRRepository.findStaffByEmployeeId(id);

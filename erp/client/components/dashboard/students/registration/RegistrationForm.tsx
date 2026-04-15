@@ -82,7 +82,7 @@ export default function RegistrationForm() {
                         toast.info("Form pre-filled from enquiry data");
                     }
                 } catch (err) {
-                    console.error("Failed to fetch enquiry", err);
+                    
                 }
             };
             fetchEnquiry();
@@ -92,7 +92,6 @@ export default function RegistrationForm() {
     const onSubmit = async (data: StudentRegistrationValues) => {
         setIsSubmitting(true);
         try {
-            console.log("Submitting form data:", data);
             const result = await studentAPI.register(data);
             if (result.success) {
                 toast.success("Student registered successfully!");

@@ -11,7 +11,10 @@ const getGradeScales = asyncHandler(async (req, res) => {
         orderBy: { name: 'asc' },
     });
 
-    res.json({ scales });
+    res.status(200).json({ 
+        success: true,
+        scales 
+    });
 });
 
 // Create grade scale with entries
@@ -19,7 +22,10 @@ const createGradeScale = asyncHandler(async (req, res) => {
     const { name, scaleType, isDefault, entries } = req.body;
 
     if (!name || !scaleType || !entries || !Array.isArray(entries) || entries.length === 0) {
-        return res.status(400).json({ error: 'Required: name, scaleType, entries (array with at least one entry)' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required: name, scaleType, entries (array with at least one entry)' 
+        });
     }
 
     // If setting as default, unset other defaults
@@ -52,10 +58,17 @@ const createGradeScale = asyncHandler(async (req, res) => {
             },
         });
 
-        res.status(201).json({ message: 'Grade scale created successfully', scale });
+        res.status(201).json({ 
+            success: true,
+            message: 'Grade scale created successfully', 
+            scale 
+        });
     } catch (error) {
         if (error.code === 'P2002') {
-            return res.status(409).json({ error: 'A grade scale with this name already exists' });
+            return res.status(409).json({ 
+                success: false,
+                message: 'A grade scale with this name already exists' 
+            });
         }
         throw error;
     }
@@ -108,7 +121,11 @@ const updateGradeScale = asyncHandler(async (req, res) => {
         });
     });
 
-    res.json({ message: 'Grade scale updated successfully', scale });
+    res.status(200).json({ 
+        success: true,
+        message: 'Grade scale updated successfully', 
+        scale 
+    });
 });
 
 // Delete grade scale
@@ -125,12 +142,18 @@ const deleteGradeScale = asyncHandler(async (req, res) => {
     }
 
     if (existing._count.exams > 0) {
-        return res.status(400).json({ error: `Cannot delete: ${existing._count.exams} exams use this grade scale` });
+        return res.status(400).json({ 
+            success: false,
+            message: `Cannot delete: ${existing._count.exams} exams use this grade scale` 
+        });
     }
 
     await prisma.gradeScale.delete({ where: { id } });
 
-    res.json({ message: 'Grade scale deleted successfully' });
+    res.status(200).json({ 
+        success: true,
+        message: 'Grade scale deleted successfully' 
+    });
 });
 
 module.exports = {

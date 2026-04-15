@@ -271,9 +271,7 @@ export default function AnnouncementsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : error ? (
-          <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-            {error}
-          </div>
+          <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{typeof error === "string" ? error : JSON.stringify(error)}</div>
         ) : announcements.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">

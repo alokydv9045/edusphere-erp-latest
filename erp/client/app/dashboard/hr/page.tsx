@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useEffect, useCallback } from 'react';
 import { hrAPI, payrollAPI, attendanceAPI, serviceAPI, academicAPI, scannerAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -20,7 +22,7 @@ import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
 import {
     CheckCircle, Clock, Calendar, UserCheck,
     FileText, UserX, UserPlus, Briefcase,
-    IndianRupee, ChevronLeft, ChevronRight, RefreshCw,
+    IndianRupee, ChevronLeft, ChevronRight, RefreshCw, Eye,
     Download, FileSpreadsheet, Loader2, Users, Plus, Search, Edit, BarChart
 } from 'lucide-react';
 import { useSocket } from '@/hooks/useSocket';
@@ -98,7 +100,7 @@ export default function HRManagementPage() {
     const [processRemarks, setProcessRemarks] = useState('');
 
     // Derived: Staff on leave today
-    const onLeaveToday = leaves.filter(l => {
+    const onLeaveToday = (leaves || []).filter(l => {
         const d = new Date(attDate);
         return l.status === 'APPROVED' && new Date(l.startDate) <= d && new Date(l.endDate) >= d;
     });
@@ -123,7 +125,7 @@ export default function HRManagementPage() {
 
     const getLeavesForDay = (day: number) => {
         const d = new Date(viewYear, viewMonth - 1, day);
-        return leaves.filter(l =>
+        return (leaves || []).filter(l =>
             l.status === 'APPROVED' &&
             new Date(l.startDate) <= d &&
             new Date(l.endDate) >= d
@@ -424,15 +426,13 @@ export default function HRManagementPage() {
     useEffect(() => {
         if (socket) {
             const handlePayrollUpdate = () => {
-                console.log('Payroll update received, refreshing...');
+                // Refresh data on socket updates
                 fetchPayroll();
             };
             const handleEmployeeUpdate = () => {
-                console.log('Employee update received, refreshing...');
                 fetchEmployees();
             };
             const handleAttendanceUpdate = () => {
-                console.log('Staff attendance update received, refreshing...');
                 fetchStaffForAttendance();
             };
 
@@ -751,6 +751,11 @@ export default function HRManagementPage() {
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex items-center justify-end gap-1">
+                                                            <Button variant="ghost" size="sm" asChild title="View Profile">
+                                                                <Link href={`/dashboard/users/${emp.userId || emp.id}`}>
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Link>
+                                                            </Button>
                                                             {canManageHR && (
                                                                 <>
                                                                     <Button variant="ghost" size="sm" onClick={() => openEdit(emp)} title="Edit">

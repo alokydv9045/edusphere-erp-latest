@@ -26,6 +26,8 @@ export interface User {
   bloodGroup?: string;
   address?: string;
   emailVerified?: boolean;
+  lastLogin?: string;
+  lastPasswordChange?: string;
   createdAt?: string;
   isActive: boolean;
   teacher?: { id: string; assignedScannerId: string | null };
@@ -33,7 +35,6 @@ export interface User {
 }
 
 export interface AuthResponse {
-  token: string;
   user: User;
   message: string;
 }
@@ -41,8 +42,7 @@ export interface AuthResponse {
 export const authAPI = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const { data } = await apiClient.post('/auth/login', credentials);
-    if (data.token && typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', data.token);
+    if (typeof window !== 'undefined') {
       localStorage.setItem('user', JSON.stringify(data.user));
     }
     return data;
@@ -50,18 +50,22 @@ export const authAPI = {
 
   register: async (userData: RegisterData): Promise<AuthResponse> => {
     const { data } = await apiClient.post('/auth/register', userData);
-    if (data.token && typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', data.token);
+    if (typeof window !== 'undefined') {
       localStorage.setItem('user', JSON.stringify(data.user));
     }
     return data;
   },
 
-  logout: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+  logout: async () => {
+    try {
+      await apiClient.post('/auth/logout');
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
   },
 
@@ -73,7 +77,9 @@ export const authAPI = {
 
   isAuthenticated: (): boolean => {
     if (typeof window === 'undefined') return false;
-    return !!localStorage.getItem('auth_token');
+    // Note: We can't check the HttpOnly cookie from JS.
+    // We rely on the existence of the user object or the /me call.
+    return !!localStorage.getItem('user');
   },
 
   getProfile: async (): Promise<{ user: User }> => {

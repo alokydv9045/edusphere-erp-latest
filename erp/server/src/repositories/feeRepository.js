@@ -270,16 +270,12 @@ class FeeRepository {
                 },
             });
 
-            const newPaid = ledger.totalPaid + parsedAmount;
-            const newPending = ledger.totalPending - parsedAmount;
-            const newStatus = newPending <= 0 ? 'PAID' : 'PARTIALLY_PAID';
-
             const updatedLedger = await tx.studentFeeLedger.update({
                 where: { id: ledger.id },
                 data: {
-                    totalPaid: newPaid,
-                    totalPending: newPending,
-                    status: newStatus,
+                    totalPaid: { increment: parsedAmount },
+                    totalPending: { decrement: parsedAmount },
+                    status: (ledger.totalPending - parsedAmount) <= 0 ? 'PAID' : 'PARTIALLY_PAID',
                 },
             });
 
@@ -371,23 +367,13 @@ class FeeRepository {
                 const ledger = await tx.studentFeeLedger.findUnique({ where: { id: adjustment.ledgerId } });
                 if (!ledger) throw new Error('Ledger not found');
 
-                const newDiscount = ledger.totalDiscount + adjustment.amount;
-                const newPayable = ledger.totalPayable - adjustment.amount;
-                let newPending = ledger.totalPending - adjustment.amount;
-
-                let newStatus = ledger.status;
-                if (newPending <= 0) {
-                    newPending = 0;
-                    newStatus = 'PAID';
-                }
-
                 await tx.studentFeeLedger.update({
                     where: { id: ledger.id },
                     data: {
-                        totalDiscount: newDiscount,
-                        totalPayable: newPayable < 0 ? 0 : newPayable,
-                        totalPending: newPending,
-                        status: newStatus,
+                        totalDiscount: { increment: adjustment.amount },
+                        totalPayable: { decrement: adjustment.amount },
+                        totalPending: { decrement: adjustment.amount },
+                        status: (ledger.totalPending - adjustment.amount) <= 0 ? 'PAID' : ledger.status
                     },
                 });
             }
@@ -435,17 +421,13 @@ class FeeRepository {
             });
 
             if (ledger) {
-                const newPaid = ledger.totalPaid - parsedAmount;
-                const newPending = ledger.totalPayable - newPaid - ledger.totalDiscount;
-                const newStatus = newPaid >= ledger.totalPayable - ledger.totalDiscount ? 'PAID' : (newPaid > 0 ? 'PARTIALLY_PAID' : 'PENDING');
-
                 await tx.studentFeeLedger.update({
                     where: { id: ledger.id },
                     data: {
-                        totalPaid: newPaid < 0 ? 0 : newPaid,
-                        totalPending: newPending > 0 ? newPending : 0,
-                        status: newStatus,
-                    },
+                        totalPaid: { decrement: parsedAmount },
+                        totalPending: { increment: parsedAmount },
+                        status: 'PARTIALLY_PAID'
+                    }
                 });
             }
 

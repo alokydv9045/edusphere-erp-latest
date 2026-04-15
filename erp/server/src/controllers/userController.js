@@ -4,6 +4,7 @@ const { generateUserQR, parseQRPayload } = require('../utils/qrGenerator');
 const { VALID_ROLES } = require('../constants');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../config/logger');
+const { validateAndNormalizeRoles } = require('../utils/userUtils');
 
 /**
  * Role Validation Rules
@@ -12,33 +13,7 @@ const logger = require('../config/logger');
  * - ADMIN represents the Principal with full access
  */
 
-/**
- * Validate roles for a user
- */
-const validateRoles = (roles, primaryRole) => {
-  // Check if all roles are valid
-  for (const role of roles) {
-    if (!VALID_ROLES.includes(role)) {
-      return { valid: false, message: `Invalid role: ${role}` };
-    }
-  }
-
-  // Students can ONLY have STUDENT role
-  if (primaryRole === 'STUDENT' && roles.length > 1) {
-    return { valid: false, message: 'Students cannot have multiple roles' };
-  }
-
-  if (primaryRole === 'STUDENT' && roles[0] !== 'STUDENT') {
-    return { valid: false, message: 'Students must have STUDENT as their only role' };
-  }
-
-  // Primary role must be in roles array
-  if (!roles.includes(primaryRole)) {
-    return { valid: false, message: 'Primary role must be included in roles array' };
-  }
-
-  return { valid: true };
-};
+// validateRoles removed - now using validateAndNormalizeRoles from userUtils
 
 /**
  * Get all users with filtering and pagination
@@ -207,6 +182,17 @@ const getAllUsers = asyncHandler(async (req, res) => {
 const getUserById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
+    // Permissions: Admins can view any user, others can only view themselves
+    const userRoles = req.user.roles || [req.user.role];
+    const isAdmin = userRoles.some(r => ['SUPER_ADMIN', 'ADMIN'].includes(r));
+    
+    if (!isAdmin && req.user.userId !== id) {
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied: You can only view your own profile'
+        });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id },
       select: {
@@ -287,20 +273,16 @@ const createUser = asyncHandler(async (req, res) => {
       });
     }
 
-    // Ensure roles array includes the primary role
-    const userRoles = roles.length > 0 ? roles : [role];
-    if (!userRoles.includes(role)) {
-      userRoles.push(role);
-    }
-
-    // Validate roles
-    const validation = validateRoles(userRoles, role);
-    if (!validation.valid) {
+    // Use centralized role validation & normalization
+    const roleCheck = validateAndNormalizeRoles(roles, role);
+    if (!roleCheck.valid) {
       return res.status(400).json({
         success: false,
-        message: validation.message
+        message: roleCheck.message
       });
     }
+
+    const { roles: userRoles } = roleCheck;
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
@@ -414,15 +396,66 @@ const getUserQR = asyncHandler(async (req, res) => {
 const regenerateUserQR = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+    // Permissions check
+    const userRoles = req.user.roles || [req.user.role];
+    const isAdmin = userRoles.some(r => ['SUPER_ADMIN', 'ADMIN'].includes(r));
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only administrators can regenerate QR codes' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id }, select: { id: true, qrIssued: true } });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.qrIssued) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'This Digital ID is marked as "Issued" and cannot be regenerated. Please unlock it first.' 
+      });
     }
 
     const qrCode = await generateUserQR(id);
     await prisma.user.update({ where: { id }, data: { qrCode } });
 
     res.json({ success: true, message: 'QR code regenerated successfully', qrCode });
+});
+
+/**
+ * Toggle the "Issued" status of a user's QR code
+ * POST /api/users/:id/qr/status
+ */
+const toggleQRIssued = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { issued } = req.body; // boolean
+
+    // Only administrators can toggle issued status
+    const userRoles = req.user.roles || [req.user.role];
+    const isAdmin = userRoles.some(r => ['SUPER_ADMIN', 'ADMIN'].includes(r));
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only administrators can toggle Digital ID status' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        qrIssued: issued,
+        qrIssuedAt: issued ? new Date() : null
+      },
+      select: { id: true, qrIssued: true, qrIssuedAt: true }
+    });
+
+    res.json({
+      success: true,
+      message: `Digital ID ${issued ? 'locked (marked as issued)' : 'unlocked'} successfully`,
+      qrIssued: updatedUser.qrIssued,
+      qrIssuedAt: updatedUser.qrIssuedAt
+    });
 });
 
 /**
@@ -479,19 +512,17 @@ const updateUser = asyncHandler(async (req, res) => {
       const newPrimaryRole = role || existingUser.role;
       const newRoles = roles || existingUser.roles || [newPrimaryRole];
 
-      // Ensure primary role is in roles array
-      if (!newRoles.includes(newPrimaryRole)) {
-        newRoles.push(newPrimaryRole);
-      }
-
-      // Validate roles
-      const validation = validateRoles(newRoles, newPrimaryRole);
-      if (!validation.valid) {
+      // Use centralized role validation & normalization
+      const roleCheck = validateAndNormalizeRoles(roles || [newPrimaryRole], newPrimaryRole);
+      if (!roleCheck.valid) {
         return res.status(400).json({
           success: false,
-          message: validation.message
+          message: roleCheck.message
         });
       }
+
+      updateData.role = newPrimaryRole;
+      updateData.roles = roleCheck.roles;
 
       // Special check: If user is a student, cannot change to multi-role
       if (existingUser.student && newRoles.length > 1) {
@@ -600,12 +631,12 @@ const updateUserRoles = asyncHandler(async (req, res) => {
     // Determine primary role
     const newPrimaryRole = primaryRole || roles[0];
 
-    // Validate roles
-    const validation = validateRoles(roles, newPrimaryRole);
-    if (!validation.valid) {
+    // Use centralized role validation & normalization
+    const roleCheck = validateAndNormalizeRoles(roles, newPrimaryRole);
+    if (!roleCheck.valid) {
       return res.status(400).json({
         success: false,
-        message: validation.message
+        message: roleCheck.message
       });
     }
 
@@ -617,12 +648,12 @@ const updateUserRoles = asyncHandler(async (req, res) => {
       });
     }
 
-    // Update roles
+    // updateRoles
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {
         role: newPrimaryRole,
-        roles: roles
+        roles: roleCheck.roles
       },
       select: {
         id: true,
@@ -787,10 +818,55 @@ module.exports = {
   deleteUser,
   updateUserRoles,
   getUsersByRole,
-  validateRoles,
   resetPassword,
   updateProfilePicture,
   uploadProfilePicture,
   getUserQR,
   regenerateUserQR,
+  toggleQRIssued,
+  changePassword: asyncHandler(async (req, res) => {
+    const id = req.user.userId;
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ success: false, message: 'All password fields are required' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'New passwords do not match' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Verify old password
+    const isMatched = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatched) {
+      return res.status(400).json({ success: false, message: 'Invalid current password' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        password: hashedPassword,
+        lastPasswordChange: new Date(),
+      },
+    });
+
+    logger.info(`Password changed for user ${id}`);
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  }),
 };

@@ -8,7 +8,10 @@ const generateReportCards = asyncHandler(async (req, res) => {
     const { examId, studentIds } = req.body;
 
     if (!examId || !studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
-        return res.status(400).json({ error: 'Required: examId and studentIds (non-empty array)' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required: examId and studentIds (non-empty array)' 
+        });
     }
 
     const exam = await prisma.exam.findUnique({
@@ -17,7 +20,10 @@ const generateReportCards = asyncHandler(async (req, res) => {
     });
 
     if (!exam) {
-        return res.status(404).json({ error: 'Exam not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Exam not found' 
+        });
     }
 
     const generatedBy = req.user.id;
@@ -58,6 +64,7 @@ const generateReportCards = asyncHandler(async (req, res) => {
     }
 
     res.status(201).json({
+        success: true,
         message: `Generated ${created.length} report cards`,
         created: created.length,
         errors,
@@ -75,7 +82,10 @@ const getReportCards = asyncHandler(async (req, res) => {
     // Data isolation: Students only see their own published report cards
     if (req.user.role === 'STUDENT') {
         const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
-        if (!student) return res.status(404).json({ error: 'Student profile not found' });
+        if (!student) return res.status(404).json({ 
+            success: false,
+            message: 'Student profile not found' 
+        });
         where.studentId = student.id;
         where.status = 'PUBLISHED'; // Force status for students
     } else if (queryStudentId) {
@@ -105,7 +115,10 @@ const getReportCards = asyncHandler(async (req, res) => {
         orderBy: { createdAt: 'desc' },
     });
 
-    res.json({ reportCards });
+    res.status(200).json({ 
+        success: true,
+        reportCards 
+    });
 });
 
 // Submit report card for approval (class teacher → principal)
@@ -114,11 +127,17 @@ const submitReportCard = asyncHandler(async (req, res) => {
 
     const reportCard = await prisma.reportCard.findUnique({ where: { id } });
     if (!reportCard) {
-        return res.status(404).json({ error: 'Report card not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Report card not found' 
+        });
     }
 
     if (reportCard.status !== 'DRAFT' && reportCard.status !== 'REJECTED') {
-        return res.status(400).json({ error: 'Only DRAFT or REJECTED report cards can be submitted' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Only DRAFT or REJECTED report cards can be submitted' 
+        });
     }
 
     const updated = await prisma.reportCard.update({
@@ -130,7 +149,11 @@ const submitReportCard = asyncHandler(async (req, res) => {
         },
     });
 
-    res.json({ message: 'Report card submitted for approval', reportCard: updated });
+    res.status(200).json({ 
+        success: true,
+        message: 'Report card submitted for approval', 
+        reportCard: updated 
+    });
 });
 
 // Bulk submit report cards
@@ -138,7 +161,10 @@ const bulkSubmitReportCards = asyncHandler(async (req, res) => {
     const { reportCardIds } = req.body;
 
     if (!reportCardIds || !Array.isArray(reportCardIds) || reportCardIds.length === 0) {
-        return res.status(400).json({ error: 'Required: reportCardIds (non-empty array)' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required: reportCardIds (non-empty array)' 
+        });
     }
 
     const result = await prisma.reportCard.updateMany({
@@ -153,7 +179,10 @@ const bulkSubmitReportCards = asyncHandler(async (req, res) => {
         },
     });
 
-    res.json({ message: `${result.count} report cards submitted for approval` });
+    res.status(200).json({ 
+        success: true,
+        message: `${result.count} report cards submitted for approval` 
+    });
 });
 
 // Approve report card (principal)
@@ -162,11 +191,17 @@ const approveReportCard = asyncHandler(async (req, res) => {
 
     const reportCard = await prisma.reportCard.findUnique({ where: { id } });
     if (!reportCard) {
-        return res.status(404).json({ error: 'Report card not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Report card not found' 
+        });
     }
 
     if (reportCard.status !== 'SUBMITTED') {
-        return res.status(400).json({ error: 'Only SUBMITTED report cards can be approved' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Only SUBMITTED report cards can be approved' 
+        });
     }
 
     const updated = await prisma.reportCard.update({
@@ -178,7 +213,11 @@ const approveReportCard = asyncHandler(async (req, res) => {
         },
     });
 
-    res.json({ message: 'Report card approved', reportCard: updated });
+    res.status(200).json({ 
+        success: true,
+        message: 'Report card approved', 
+        reportCard: updated 
+    });
 });
 
 // Bulk approve
@@ -186,7 +225,10 @@ const bulkApproveReportCards = asyncHandler(async (req, res) => {
     const { reportCardIds } = req.body;
 
     if (!reportCardIds || !Array.isArray(reportCardIds) || reportCardIds.length === 0) {
-        return res.status(400).json({ error: 'Required: reportCardIds (non-empty array)' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required: reportCardIds (non-empty array)' 
+        });
     }
 
     const result = await prisma.reportCard.updateMany({
@@ -201,7 +243,10 @@ const bulkApproveReportCards = asyncHandler(async (req, res) => {
         },
     });
 
-    res.json({ message: `${result.count} report cards approved` });
+    res.status(200).json({ 
+        success: true,
+        message: `${result.count} report cards approved` 
+    });
 });
 
 // Reject report card (principal)
@@ -210,16 +255,25 @@ const rejectReportCard = asyncHandler(async (req, res) => {
     const { remark } = req.body;
 
     if (!remark) {
-        return res.status(400).json({ error: 'Rejection remark is required' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Rejection remark is required' 
+        });
     }
 
     const reportCard = await prisma.reportCard.findUnique({ where: { id } });
     if (!reportCard) {
-        return res.status(404).json({ error: 'Report card not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Report card not found' 
+        });
     }
 
     if (reportCard.status !== 'SUBMITTED') {
-        return res.status(400).json({ error: 'Only SUBMITTED report cards can be rejected' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Only SUBMITTED report cards can be rejected' 
+        });
     }
 
     const updated = await prisma.reportCard.update({
@@ -230,7 +284,11 @@ const rejectReportCard = asyncHandler(async (req, res) => {
         },
     });
 
-    res.json({ message: 'Report card rejected', reportCard: updated });
+    res.status(200).json({ 
+        success: true,
+        message: 'Report card rejected', 
+        reportCard: updated 
+    });
 });
 
 // Download report card as PDF
@@ -260,7 +318,29 @@ const downloadReportCard = asyncHandler(async (req, res) => {
     });
 
     if (!reportCard) {
-        return res.status(404).json({ error: 'Report card not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Report card not found' 
+        });
+    }
+
+    // IDOR Check: Students can only download their own report card
+    if (req.user.role === 'STUDENT') {
+        const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
+        if (!student || reportCard.studentId !== student.id) {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Forbidden: You can only download your own report card' 
+            });
+        }
+        
+        // Students can only download if it is PUBLISHED
+        if (reportCard.status !== 'PUBLISHED') {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Forbidden: Report card is not yet published' 
+            });
+        }
     }
 
     // Fetch detailed marks for this student and exam
@@ -325,7 +405,10 @@ const bulkPublishReportCards = asyncHandler(async (req, res) => {
     const { reportCardIds } = req.body;
 
     if (!reportCardIds || !Array.isArray(reportCardIds) || reportCardIds.length === 0) {
-        return res.status(400).json({ error: 'Required: reportCardIds (non-empty array)' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required: reportCardIds (non-empty array)' 
+        });
     }
 
     const result = await prisma.reportCard.updateMany({
@@ -338,7 +421,10 @@ const bulkPublishReportCards = asyncHandler(async (req, res) => {
         },
     });
 
-    res.json({ message: `${result.count} report cards published successfully` });
+    res.status(200).json({ 
+        success: true,
+        message: `${result.count} report cards published successfully` 
+    });
 });
 
 // --- Report Template Controllers ---
@@ -347,7 +433,10 @@ const getReportTemplates = asyncHandler(async (req, res) => {
     const templates = await prisma.reportTemplate.findMany({
         orderBy: { createdAt: 'desc' }
     });
-    res.json({ templates });
+    res.status(200).json({ 
+        success: true,
+        templates 
+    });
 });
 
 const createReportTemplate = asyncHandler(async (req, res) => {
@@ -356,7 +445,10 @@ const createReportTemplate = asyncHandler(async (req, res) => {
         await prisma.reportTemplate.updateMany({ data: { isDefault: false } });
     }
     const template = await prisma.reportTemplate.create({ data: templateData });
-    res.status(201).json({ template });
+    res.status(201).json({ 
+        success: true,
+        template 
+    });
 });
 
 const updateReportTemplate = asyncHandler(async (req, res) => {
@@ -372,7 +464,10 @@ const updateReportTemplate = asyncHandler(async (req, res) => {
         where: { id },
         data: updates
     });
-    res.json({ template });
+    res.status(200).json({ 
+        success: true,
+        template 
+    });
 });
 
 module.exports = {

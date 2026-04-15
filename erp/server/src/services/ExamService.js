@@ -139,7 +139,7 @@ class ExamService {
                     startTime: s.startTime || DEFAULTS.EXAM_START_TIME,
                     duration: parseInt(s.duration) || DEFAULTS.EXAM_DURATION,
                     totalMarks: parseFloat(s.totalMarks),
-                    passMarks: parseFloat(s.passMarks) || parseFloat(s.totalMarks) * (passPercentage / 100),
+                    passMarks: parseFloat(s.passMarks) >= 0 ? parseFloat(s.passMarks) : parseFloat(s.totalMarks) * (passPercentage / 100),
                     theoryMaxMarks: parseFloat(s.theoryMaxMarks) || 0,
                     practicalMaxMarks: parseFloat(s.practicalMaxMarks) || 0,
                     internalMaxMarks: parseFloat(s.internalMaxMarks) || 0,
@@ -213,7 +213,7 @@ class ExamService {
             startTime: startTime || DEFAULTS.EXAM_START_TIME,
             duration: parseInt(duration) || DEFAULTS.EXAM_DURATION,
             totalMarks: parseFloat(totalMarks),
-            passMarks: parseFloat(passMarks) || parseFloat(totalMarks) * (passPercentage / 100),
+            passMarks: parseFloat(passMarks) >= 0 ? parseFloat(passMarks) : parseFloat(totalMarks) * (passPercentage / 100),
             theoryMaxMarks: parseFloat(theoryMaxMarks) || 0,
             practicalMaxMarks: parseFloat(practicalMaxMarks) || 0,
             internalMaxMarks: parseFloat(internalMaxMarks) || 0,
@@ -272,29 +272,39 @@ class ExamService {
         const saved = [];
 
         await ExamRepository.executeTransaction(async (tx) => {
+            const studentIds = marks.map(m => m.studentId);
+            
+            // Batch fetch existing results and marks
+            const existingResults = await tx.examResult.findMany({
+                where: { examId, studentId: { in: studentIds } },
+                include: { marks: true }
+            });
+            
+            const resultMap = new Map(existingResults.map(r => [r.studentId, r]));
+
             for (const m of marks) {
                 const theory = m.isAbsent ? 0 : parseFloat(m.theoryObtained) || 0;
                 const practical = m.isAbsent ? 0 : parseFloat(m.practicalObtained) || 0;
                 const internal = m.isAbsent ? 0 : parseFloat(m.internalObtained) || 0;
                 const obtainedMarks = theory + practical + internal;
-                const pct = examSubject.totalMarks > 0 ? (obtainedMarks / examSubject.totalMarks) * 100 : 0;
+                const pct = (examSubject.totalMarks && examSubject.totalMarks > 0) ? (obtainedMarks / examSubject.totalMarks) * 100 : 0;
 
-                const examResult = await tx.examResult.upsert({
-                    where: { examId_studentId: { examId, studentId: m.studentId } },
-                    create: {
-                        examId,
-                        studentId: m.studentId,
-                        totalMarks: 0,
-                        obtainedMarks: 0,
-                        percentage: 0,
-                        result: 'PASS',
-                    },
-                    update: {},
-                });
+                let examResult = resultMap.get(m.studentId);
+                if (!examResult) {
+                    examResult = await tx.examResult.create({
+                        data: {
+                            examId,
+                            studentId: m.studentId,
+                            totalMarks: 0,
+                            obtainedMarks: 0,
+                            percentage: 0,
+                            result: 'PASS',
+                        },
+                        include: { marks: true }
+                    });
+                }
 
-                const existingMark = await tx.examMark.findFirst({
-                    where: { examResultId: examResult.id, subjectCode: examSubject.subject.code },
-                });
+                const existingMark = examResult.marks.find((mk) => mk.subjectCode === examSubject.subject.code);
 
                 const markData = {
                     subjectName: examSubject.subject.name,
@@ -317,17 +327,20 @@ class ExamService {
                     await tx.examMark.create({ data: { examResultId: examResult.id, ...markData } });
                 }
 
+                // Optimization: Refetch all marks for this result in one query at the end? 
+                // No, we need it to update total marks for THIS student. 
+                // But we can fetch it once per student.
                 const allMarks = await tx.examMark.findMany({ where: { examResultId: examResult.id } });
                 const totalMax = allMarks.reduce((sum, mk) => sum + mk.totalMarks, 0);
-                const totalObt = allMarks.filter(mk => !mk.isAbsent || mk.absenceType === 'MEDICAL')
+                const totalObt = allMarks.filter(mk => !mk.isAbsent)
                     .reduce((sum, mk) => sum + mk.obtainedMarks, 0);
-                const totalMaxForCalc = allMarks.filter(mk => !mk.isAbsent || mk.absenceType === 'MEDICAL')
+                const totalMaxForCalc = allMarks.filter(mk => !mk.isAbsent)
                     .reduce((sum, mk) => sum + mk.totalMarks, 0);
                 
                 const overallPct = totalMaxForCalc > 0 ? (totalObt / totalMaxForCalc) * 100 : 0;
+                
                 const hasFailingSubject = allMarks.some(mk => {
-                    if (mk.isAbsent) return false;
-                    // Bug #13 fix: use configurable pass percentage for each mark
+                    if (mk.isAbsent) return mk.absenceType !== 'MEDICAL';
                     const markPassMarks = mk.totalMarks * (passPct / 100);
                     return mk.obtainedMarks < markPassMarks;
                 });
@@ -339,9 +352,7 @@ class ExamService {
                         obtainedMarks: totalObt,
                         percentage: parseFloat(overallPct.toFixed(2)),
                         grade: calcGrade(overallPct),
-                        result: allMarks.some(mk => mk.isAbsent && mk.absenceType !== 'MEDICAL')
-                            ? 'ABSENT'
-                            : overallPct >= passPct && !hasFailingSubject ? 'PASS' : 'FAIL',
+                        result: (overallPct >= passPct && !hasFailingSubject) ? 'PASS' : 'FAIL',
                         remarks: this.generateRemarks(overallPct, { entries: gradeEntries }),
                     },
                 });

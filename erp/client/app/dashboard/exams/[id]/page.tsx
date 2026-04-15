@@ -345,7 +345,7 @@ function ExamDetailContent() {
         </div>
       )}
 
-      {error && <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
+      {error && <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{typeof error === "string" ? error : JSON.stringify(error)}</div>}
 
       <Tabs defaultValue={activeTab} className="space-y-4">
         <TabsList>

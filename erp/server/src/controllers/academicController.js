@@ -9,14 +9,20 @@ const getAcademicYears = asyncHandler(async (req, res) => {
   const academicYears = await prisma.academicYear.findMany({
     orderBy: { startDate: 'desc' },
   });
-  res.json({ academicYears });
+  res.status(200).json({ 
+    success: true,
+    academicYears 
+  });
 });
 
 const createAcademicYear = asyncHandler(async (req, res) => {
   const { name, startDate, endDate, isCurrent } = req.body;
 
   if (!name || !startDate || !endDate) {
-    return res.status(400).json({ error: 'Name, start date, and end date are required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Name, start date, and end date are required' 
+    });
   }
 
   // If this is set to current, unset others first
@@ -37,6 +43,7 @@ const createAcademicYear = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Academic year created successfully',
     year,
   });
@@ -48,7 +55,10 @@ const setCurrentAcademicYear = asyncHandler(async (req, res) => {
   // Check if year exists
   const year = await prisma.academicYear.findUnique({ where: { id } });
   if (!year) {
-    return res.status(404).json({ error: 'Academic year not found' });
+    return res.status(404).json({ 
+      success: false,
+      message: 'Academic year not found' 
+    });
   }
 
   // Transaction to ensure atomicity
@@ -65,7 +75,10 @@ const setCurrentAcademicYear = asyncHandler(async (req, res) => {
     })
   ]);
 
-  res.json({ message: 'Current academic year updated successfully' });
+  res.status(200).json({ 
+    success: true,
+    message: 'Current academic year updated successfully' 
+  });
 });
 
 // Classes
@@ -91,19 +104,28 @@ const getClasses = asyncHandler(async (req, res) => {
     },
     orderBy: { numericValue: 'asc' },
   });
-  res.json({ classes });
+  res.status(200).json({ 
+    success: true,
+    classes 
+  });
 });
 
 const createClass = asyncHandler(async (req, res) => {
   const { name, numericValue, description, academicYearId, classTeacherId } = req.body;
 
   if (!name || !numericValue || !academicYearId) {
-    return res.status(400).json({ error: 'Name, numeric level, and academic year are required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Name, numeric level, and academic year are required' 
+    });
   }
 
   const parsedNumericValue = parseInt(numericValue);
   if (isNaN(parsedNumericValue)) {
-    return res.status(400).json({ error: 'Numeric level must be a valid number' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Numeric level must be a valid number' 
+    });
   }
 
   const classData = await prisma.class.create({
@@ -121,6 +143,7 @@ const createClass = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Class created successfully',
     class: classData,
   });
@@ -147,14 +170,20 @@ const getSubjects = asyncHandler(async (req, res) => {
     },
   });
 
-  res.json({ subjects });
+  res.status(200).json({ 
+    success: true,
+    subjects 
+  });
 });
 
 const createSubject = asyncHandler(async (req, res) => {
   const { name, code, description, classId, type, totalMarks, passMarks, teacherId } = req.body;
 
   if (!name || !code || !classId) {
-    return res.status(400).json({ error: 'Name, code, and class are required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Name, code, and class are required' 
+    });
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -184,6 +213,7 @@ const createSubject = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Subject created successfully',
     subject: result,
   });
@@ -193,7 +223,10 @@ const assignSubjectTeacher = asyncHandler(async (req, res) => {
   const { subjectId, teacherId } = req.body;
 
   if (!subjectId || !teacherId) {
-    return res.status(400).json({ error: 'Subject and Teacher IDs are required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Subject and Teacher IDs are required' 
+    });
   }
 
   const assignment = await prisma.subjectTeacher.create({
@@ -208,6 +241,7 @@ const assignSubjectTeacher = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Teacher assigned to subject successfully',
     assignment,
   });
@@ -230,7 +264,10 @@ const getSections = asyncHandler(async (req, res) => {
     },
   });
 
-  res.json({ sections });
+  res.status(200).json({ 
+    success: true,
+    sections 
+  });
 });
 
 const createSection = asyncHandler(async (req, res) => {
@@ -246,6 +283,7 @@ const createSection = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Section created successfully',
     section,
   });
@@ -256,16 +294,25 @@ const updateClass = asyncHandler(async (req, res) => {
   const { name, numericValue, description, academicYearId, classTeacherId } = req.body;
 
   if (!name || !numericValue || !academicYearId) {
-    return res.status(400).json({ error: 'Name, numeric level, and academic year are required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Name, numeric level, and academic year are required' 
+    });
   }
 
   const parsedNumericValue = parseInt(numericValue);
   if (isNaN(parsedNumericValue)) {
-    return res.status(400).json({ error: 'Numeric level must be a valid number' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Numeric level must be a valid number' 
+    });
   }
 
   const existing = await prisma.class.findUnique({ where: { id } });
-  if (!existing) return res.status(404).json({ error: 'Class not found' });
+  if (!existing) return res.status(404).json({ 
+    success: false,
+    message: 'Class not found' 
+  });
 
   const classData = await prisma.class.update({
     where: { id },
@@ -279,19 +326,43 @@ const updateClass = asyncHandler(async (req, res) => {
     include: { academicYear: true, classTeacher: { include: { user: true } } },
   });
 
-  res.json({ message: 'Class updated successfully', class: classData });
+  res.status(200).json({ 
+    success: true,
+    message: 'Class updated successfully', 
+    class: classData 
+  });
 });
 
 const deleteClass = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const existing = await prisma.class.findUnique({
     where: { id },
-    include: { _count: { select: { students: true, sections: true, subjects: true } } },
+    include: { 
+      _count: { 
+        select: { 
+          students: true, 
+          sections: true, 
+          subjects: true,
+          attendanceRecords: true,
+          examResults: true
+        } 
+      } 
+    },
   });
   if (!existing) return res.status(404).json({ error: 'Class not found' });
 
   if (existing._count.students > 0) {
-    return res.status(400).json({ error: `Cannot delete class with ${existing._count.students} enrolled student(s). Remove students first.` });
+    return res.status(400).json({ 
+      success: false,
+      message: `Cannot delete class with ${existing._count.students} currently enrolled student(s).` 
+    });
+  }
+
+  if (existing._count.attendanceRecords > 0 || existing._count.examResults > 0) {
+    return res.status(400).json({ 
+      success: false,
+      message: `Cannot delete class with historical records (${existing._count.attendanceRecords} attendance, ${existing._count.examResults} exams). Use Archive instead.` 
+    });
   }
 
   // Delete related subjects and sections first
@@ -299,15 +370,22 @@ const deleteClass = asyncHandler(async (req, res) => {
   await prisma.section.deleteMany({ where: { classId: id } });
   await prisma.class.delete({ where: { id } });
 
-  res.json({ message: 'Class deleted successfully' });
+  res.status(200).json({ 
+    success: true,
+    message: 'Class deleted successfully' 
+  });
 });
 
 const updateSubject = asyncHandler(async (req, res) => {
+  // ... (unchanged)
   const { id } = req.params;
   const { name, code, description, classId, type, totalMarks, passMarks } = req.body;
 
   if (!name || !code || !classId) {
-    return res.status(400).json({ error: 'Name, code, and class are required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Name, code, and class are required' 
+    });
   }
 
   const existing = await prisma.subject.findUnique({ where: { id } });
@@ -327,7 +405,11 @@ const updateSubject = asyncHandler(async (req, res) => {
     include: { class: true },
   });
 
-  res.json({ message: 'Subject updated successfully', subject });
+  res.status(200).json({ 
+    success: true,
+    message: 'Subject updated successfully', 
+    subject 
+  });
 });
 
 const deleteSubject = asyncHandler(async (req, res) => {
@@ -336,7 +418,10 @@ const deleteSubject = asyncHandler(async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Subject not found' });
 
   await prisma.subject.delete({ where: { id } });
-  res.json({ message: 'Subject deleted successfully' });
+  res.status(200).json({ 
+    success: true,
+    message: 'Subject deleted successfully' 
+  });
 });
 
 const updateSection = asyncHandler(async (req, res) => {
@@ -344,11 +429,17 @@ const updateSection = asyncHandler(async (req, res) => {
   const { name, classId, maxStudents } = req.body;
 
   if (!name || !classId) {
-    return res.status(400).json({ error: 'Name and class are required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Name and class are required' 
+    });
   }
 
   const existing = await prisma.section.findUnique({ where: { id } });
-  if (!existing) return res.status(404).json({ error: 'Section not found' });
+  if (!existing) return res.status(404).json({ 
+    success: false,
+    message: 'Section not found' 
+  });
 
   const section = await prisma.section.update({
     where: { id },
@@ -356,23 +447,48 @@ const updateSection = asyncHandler(async (req, res) => {
     include: { class: true },
   });
 
-  res.json({ message: 'Section updated successfully', section });
+  res.status(200).json({ 
+    success: true,
+    message: 'Section updated successfully', 
+    section 
+  });
 });
 
 const deleteSection = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const existing = await prisma.section.findUnique({
     where: { id },
-    include: { _count: { select: { students: true } } },
+    include: { 
+      _count: { 
+        select: { 
+          students: true,
+          attendanceRecords: true,
+          examResults: true
+        } 
+      } 
+    },
   });
   if (!existing) return res.status(404).json({ error: 'Section not found' });
 
   if (existing._count.students > 0) {
-    return res.status(400).json({ error: `Cannot delete section with ${existing._count.students} enrolled student(s). Reassign students first.` });
+    return res.status(400).json({ 
+      success: false,
+      message: `Cannot delete section with ${existing._count.students} currently enrolled student(s).` 
+    });
+  }
+
+  if (existing._count.attendanceRecords > 0 || existing._count.examResults > 0) {
+    return res.status(400).json({ 
+      success: false,
+      message: `Cannot delete section with historical records (${existing._count.attendanceRecords} attendance, ${existing._count.examResults} exams).` 
+    });
   }
 
   await prisma.section.delete({ where: { id } });
-  res.json({ message: 'Section deleted successfully' });
+  res.status(200).json({ 
+    success: true,
+    message: 'Section deleted successfully' 
+  });
 });
 
 // Dashboard Stats
@@ -384,7 +500,8 @@ const getAcademicDashboardStats = asyncHandler(async (req, res) => {
   const totalSubjects = await prisma.subject.count();
   const totalTeachers = await prisma.teacher.count({ where: { status: 'ACTIVE' } });
 
-  res.json({
+  res.status(200).json({
+    success: true,
     stats: {
       totalYears,
       currentYear,
@@ -420,7 +537,10 @@ const getTimetables = asyncHandler(async (req, res) => {
     },
     orderBy: { createdAt: 'desc' },
   });
-  res.json({ timetables });
+  res.status(200).json({ 
+    success: true,
+    timetables 
+  });
 });
 
 const createTimetable = asyncHandler(async (req, res) => {
@@ -428,13 +548,19 @@ const createTimetable = asyncHandler(async (req, res) => {
   const pdfUrl = req.file ? `/uploads/timetables/${req.file.filename}` : null;
 
   if (!name || !classId || !effectiveFrom) {
-    return res.status(400).json({ error: 'Name, class, and effective date are required' });
+    return res.status(400).json({ 
+        success: false,
+        message: 'Name, class, and effective date are required' 
+    });
   }
 
   // Verify classId exists
   const classExists = await prisma.class.findUnique({ where: { id: classId } });
   if (!classExists) {
-    return res.status(400).json({ error: 'Class not found with given classId' });
+    return res.status(400).json({ 
+        success: false,
+        message: 'Class not found with given classId' 
+    });
   }
 
   const timetable = await prisma.timetable.create({
@@ -450,6 +576,7 @@ const createTimetable = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Timetable created successfully',
     timetable,
   });
@@ -462,7 +589,10 @@ const deleteTimetable = asyncHandler(async (req, res) => {
   // Find timetable first to get pdfUrl
   const timetable = await prisma.timetable.findUnique({ where: { id } });
   if (!timetable) {
-    return res.status(404).json({ error: 'Timetable not found' });
+    return res.status(404).json({ 
+      success: false,
+      message: 'Timetable not found' 
+    });
   }
 
   // Hard delete from DB
@@ -480,7 +610,10 @@ const deleteTimetable = asyncHandler(async (req, res) => {
       }
     }
   }
-  res.json({ message: 'Timetable deleted successfully' });
+  res.status(200).json({ 
+    success: true,
+    message: 'Timetable deleted successfully' 
+  });
 });
 
 module.exports = {

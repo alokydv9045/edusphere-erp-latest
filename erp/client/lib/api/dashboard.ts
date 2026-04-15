@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { CalendarEvent } from './calendar';
 
 export interface DashboardStats {
   totalStudents: number;
@@ -16,13 +17,18 @@ export interface DashboardStats {
   pendingFeeCount?: number;
   upcomingExamCount?: number;
   overdueBooks?: number;
-  
+  attendanceDetails?: {
+    marked: number;
+    total: number;
+  };
+
   role?: string;
   attendancePercentage?: number;
   pendingFees?: number;
   nextExam?: { name: string; date: string } | null;
   booksDue?: number;
   studentId?: string;
+  todayEvent?: CalendarEvent | null;
 
   isClassTeacher?: boolean;
   myClassId?: string | null;
@@ -52,6 +58,15 @@ export interface DashboardStats {
     phone: string;
     status: string;
   }[];
+  transport?: {
+    totalVehicles?: number;
+    activeTrips?: number;
+    totalAllocations?: number;
+    onRoad?: boolean;
+    route?: string;
+    stop?: string;
+    time?: string;
+  };
 }
 
 export interface RecentActivity {

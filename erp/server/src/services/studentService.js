@@ -196,7 +196,7 @@ class StudentService {
             halfDay: enrichedAttendance.filter((a) => a.status === 'HALF_DAY').length,
         };
 
-        stats.percentage = stats.total > 0 ? (((stats.present + stats.late) / stats.total) * 100).toFixed(2) : 0;
+        stats.percentage = stats.total > 0 ? Number((((stats.present + stats.late) / stats.total) * 100).toFixed(2)) : 0;
 
         // 4. Calculate Streak (Presence Streak)
         let currentStreak = 0;

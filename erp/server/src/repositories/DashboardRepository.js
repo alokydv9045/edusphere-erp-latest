@@ -86,16 +86,13 @@ class DashboardRepository {
     }
 
     async countOverdueBooks(studentIdOrList, teacherId) {
-        const studentFilter = Array.isArray(studentIdOrList) 
+        const studentFilter = Array.isArray(studentIdOrList)
             ? { studentId: { in: studentIdOrList } }
             : { studentId: studentIdOrList };
-            
+
         return prisma.libraryIssue.count({
             where: {
-                OR: [
-                    studentFilter,
-                    { teacherId }
-                ],
+                ...studentFilter,
                 status: 'OVERDUE'
             }
         });
@@ -104,24 +101,28 @@ class DashboardRepository {
     // --- Accountant Stats ---
     async getFeeSum(status, fromDate, toDate) {
         const where = { status };
-        if (fromDate) {
-            where.paymentDate = { gte: fromDate };
+        if (fromDate || toDate) {
+            where.paymentDate = {};
+            if (fromDate) where.paymentDate.gte = fromDate;
             if (toDate) where.paymentDate.lt = toDate;
         }
-        
-        return prisma.feePayment.aggregate({
+
+        const result = await prisma.feePayment.aggregate({
             _sum: { amount: true },
             where
         });
+
+        return result || { _sum: { amount: 0 } };
     }
 
     async countFeeTransactions(status, fromDate, toDate) {
-        return prisma.feePayment.count({
-            where: {
-                status,
-                paymentDate: { gte: fromDate, lt: toDate }
-            }
-        });
+        const where = { status };
+        if (fromDate || toDate) {
+            where.paymentDate = {};
+            if (fromDate) where.paymentDate.gte = fromDate;
+            if (toDate) where.paymentDate.lt = toDate;
+        }
+        return prisma.feePayment.count({ where });
     }
 
     // --- Admission Manager Stats ---
@@ -169,12 +170,37 @@ class DashboardRepository {
         return prisma.user.count({ where: { role, isActive } });
     }
 
+    async countSubjectTeachers(teacherId) {
+        return prisma.subjectTeacher.count({
+            where: { teacherId }
+        });
+    }
+
     async countClasses() {
         return prisma.class.count();
     }
 
+    async countTotalSections() {
+        return prisma.section.count();
+    }
+
+    async countMarkedAttendanceSlots(date) {
+        return prisma.attendanceSlot.count({
+            where: {
+                date: date,
+                attendeeType: 'STUDENT'
+            }
+        });
+    }
+
     async countAttendanceRecords(fromDate, toDate, status) {
-        const where = { date: { gte: fromDate, lt: toDate } };
+        const where = {};
+        if (fromDate || toDate) {
+            where.date = {};
+            if (fromDate) where.date.gte = fromDate;
+            if (toDate) where.date.lt = toDate;
+        }
+
         if (status) {
             if (Array.isArray(status)) {
                 where.status = { in: status };
@@ -186,8 +212,13 @@ class DashboardRepository {
     }
 
     async aggregateAttendance(fromDate, toDate, status) {
-        const where = { date: { gte: fromDate } };
-        if (toDate) where.date.lt = toDate;
+        const where = {};
+        if (fromDate || toDate) {
+            where.date = {};
+            if (fromDate) where.date.gte = fromDate;
+            if (toDate) where.date.lt = toDate;
+        }
+
         if (status) {
             if (Array.isArray(status)) {
                 where.status = { in: status };
@@ -195,11 +226,12 @@ class DashboardRepository {
                 where.status = status;
             }
         }
-        
-        return prisma.attendanceRecord.aggregate({
+
+        const result = await prisma.attendanceRecord.aggregate({
             _count: { id: true },
             where
         });
+        return result || { _count: { id: 0 } };
     }
 
     async countUpcomingExams(fromDate, toDate) {
@@ -370,7 +402,7 @@ class DashboardRepository {
                 try {
                     const meta = JSON.parse(req.metadata);
                     if (meta.leaveType) type = meta.leaveType;
-                } catch (e) {}
+                } catch (e) { }
             }
             if (type === 'Other' && req.subject) {
                 type = req.subject.split(' ')[0].replace(':', '');
@@ -435,6 +467,50 @@ class DashboardRepository {
             include: { student: true, exam: true },
             take: limit,
             orderBy: { updatedAt: 'desc' }
+        });
+    }
+
+    // --- Transport Stats ---
+    async countVehicles() {
+        return prisma.vehicle.count();
+    }
+
+    async countActiveTrips() {
+        return prisma.transportTrip.count({
+            where: { status: 'IN_PROGRESS' }
+        });
+    }
+
+    async countTransportAllocations() {
+        return prisma.transportAllocation.count({
+            where: { status: 'ACTIVE' }
+        });
+    }
+
+    async getAttendanceTrendData(startDate, classId, studentId) {
+        const where = {
+            date: { gte: startDate },
+            attendeeType: 'STUDENT'
+        };
+
+        if (studentId) {
+            where.studentId = studentId;
+        } else if (classId) {
+            // Fix: Prisma groupBy does NOT support relation filters (filtering by student.currentClassId)
+            // We fetch the student IDs for the class first.
+            const students = await this.getClassStudents(classId);
+            const studentIds = students.map(s => s.id);
+            
+            if (studentIds.length === 0) return []; // Fallback for empty classes
+            
+            where.studentId = { in: studentIds };
+        }
+
+        return prisma.attendanceRecord.groupBy({
+            by: ['date', 'status'],
+            where,
+            _count: { id: true },
+            orderBy: { date: 'asc' }
         });
     }
 }

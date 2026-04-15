@@ -234,7 +234,7 @@ export default function GradingScalesPage() {
                             <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}><X className="h-4 w-4" /></Button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                            {error && <div className="text-sm text-red-500 bg-red-50 p-2 rounded">{error}</div>}
+                            {error && <div className="text-sm text-red-500 bg-red-50 p-2 rounded">{typeof error === "string" ? error : JSON.stringify(error)}</div>}
 
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">

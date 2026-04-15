@@ -88,23 +88,29 @@ class InventoryService {
 
     async recordStockMovement(movementData, performedBy) {
         const { itemId, movementType, quantity, referenceNumber, remarks } = movementData;
-
-        const item = await inventoryRepo.findItemById(itemId);
-        if (!item) throw new NotFoundError('Inventory item not found');
-
         const qty = parseInt(quantity);
-        let newQuantity = item.quantity;
 
-        if (['IN', 'PURCHASE', 'RETURN', 'ADJUSTMENT_IN'].includes(movementType)) {
-            newQuantity += qty;
-        } else if (['OUT', 'ISSUE', 'DAMAGE', 'LOST', 'ADJUSTMENT_OUT'].includes(movementType)) {
-            if (qty > item.quantity) {
-                throw new ValidationError('Insufficient stock quantity');
+        return await inventoryRepo.executeTransaction(async (tx) => {
+            // Lock the item for update to prevent race conditions
+            const item = await tx.inventoryItem.findUnique({
+                where: { id: itemId }
+            });
+            
+            if (!item) throw new NotFoundError('Inventory item not found');
+
+            let newQuantity = item.quantity;
+            const isIncrement = ['IN', 'PURCHASE', 'RETURN', 'ADJUSTMENT_IN'].includes(movementType);
+            const isDecrement = ['OUT', 'ISSUE', 'DAMAGE', 'LOST', 'ADJUSTMENT_OUT'].includes(movementType);
+
+            if (isIncrement) {
+                newQuantity += qty;
+            } else if (isDecrement) {
+                if (qty > item.quantity) {
+                    throw new ValidationError(`Insufficient stock. Available: ${item.quantity}`);
+                }
+                newQuantity -= qty;
             }
-            newQuantity -= qty;
-        }
 
-        const result = await inventoryRepo.executeTransaction(async (tx) => {
             const movement = await tx.stockMovement.create({
                 data: {
                     itemId,
@@ -126,9 +132,6 @@ class InventoryService {
 
             return movement;
         });
-
-        emitEvent('INVENTORY_STOCK_MOVEMENT', result, 'ADMIN');
-        return result;
     }
 
     async getStockMovements(filters) {

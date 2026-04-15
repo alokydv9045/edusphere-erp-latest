@@ -11,6 +11,8 @@ interface UserQRCodeProps {
     isAdmin?: boolean;
 }
 
+import apiClient from '@/lib/api/client';
+
 export default function UserQRCode({ userId, userName, userRole, isAdmin = false }: UserQRCodeProps) {
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -21,16 +23,10 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
         try {
             setLoading(true);
             setError(null);
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'}/users/${userId}/qr`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            if (!res.ok) throw new Error('Failed to load QR code');
-            const data = await res.json();
-            setQrCode(data.qrCode);
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to load QR code');
+            const res = await apiClient.get(`/users/${userId}/qr`);
+            setQrCode(res.data.qrCode);
+        } catch (err: any) {
+            setError(err.response?.data?.message || err.message || 'Failed to load QR code');
         } finally {
             setLoading(false);
         }
@@ -41,16 +37,10 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
     const handleRegenerate = async () => {
         try {
             setRegenerating(true);
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'}/users/${userId}/qr/regenerate`,
-                { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
-            );
-            if (!res.ok) throw new Error('Regeneration failed');
-            const data = await res.json();
-            setQrCode(data.qrCode);
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Regeneration failed');
+            const res = await apiClient.post(`/users/${userId}/qr/regenerate`);
+            setQrCode(res.data.qrCode);
+        } catch (err: any) {
+            setError(err.response?.data?.message || err.message || 'Regeneration failed');
         } finally {
             setRegenerating(false);
         }

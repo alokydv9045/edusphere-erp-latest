@@ -63,6 +63,7 @@ const submitAssignment = asyncHandler(async (req, res) => {
   });
 
   res.status(200).json({
+    success: true,
     message: 'Assignment submitted successfully',
     submission,
   });
@@ -96,7 +97,8 @@ const gradeSubmission = asyncHandler(async (req, res) => {
     },
   });
 
-  res.json({
+  res.status(200).json({
+    success: true,
     message: 'Submission graded successfully',
     submission: updatedSubmission,
   });

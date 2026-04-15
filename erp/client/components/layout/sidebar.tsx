@@ -20,7 +20,9 @@ import {
   User,
   Briefcase,
   ClipboardCheck,
-  QrCode
+  QrCode,
+  Bus,
+  CalendarDays
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -35,6 +37,7 @@ import { schoolConfigAPI } from '@/lib/api';
  */
 const navigationConfig = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'LIBRARIAN', 'ACCOUNTANT', 'HR_MANAGER', 'ADMISSION_MANAGER'] },
+  { name: 'Academic Calendar', href: '/dashboard/calendar', icon: CalendarDays, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'ACCOUNTANT', 'LIBRARIAN', 'HR_MANAGER', 'ADMISSION_MANAGER'] },
   { name: 'User Management', href: '/dashboard/users', icon: UserCog, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { name: 'Students', href: '/dashboard/students', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT', 'ADMISSION_MANAGER'] },
   { name: 'Teachers', href: '/dashboard/teachers', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN'] },
@@ -49,6 +52,7 @@ const navigationConfig = [
   { name: 'Marks Entry', href: '/dashboard/exams/marks-entry', icon: ClipboardCheck, roles: ['TEACHER'] },
   { name: 'Library', href: '/dashboard/library', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'] },
   { name: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER'] },
+  { name: 'Transport', href: '/dashboard/transport', icon: Bus, roles: ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'DRIVER', 'STUDENT', 'PARENT', 'ADMISSION_MANAGER'] },
   { name: 'My Schedule', href: '/dashboard/schedule', icon: Clock, roles: ['TEACHER'] },
   { name: 'Announcements', href: '/dashboard/announcements', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT'] },
   { name: 'Services', href: '/dashboard/services', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'STUDENT'] },

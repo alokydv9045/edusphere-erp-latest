@@ -1,4 +1,6 @@
+const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const DashboardRepository = require('../repositories/DashboardRepository');
+const CalendarService = require('./CalendarService');
 const logger = require('../config/logger');
 
 /**
@@ -6,31 +8,45 @@ const logger = require('../config/logger');
  */
 class DashboardService {
     async getDashboardStats(userRole, userId) {
-        const today = new Date();
-        const todayStart = new Date(today);
-        todayStart.setHours(0, 0, 0, 0);
+        const today = getSchoolDate();
+        const todayEvents = await CalendarService.getEvents(today, today);
+        const todayEvent = todayEvents.length > 0 ? todayEvents[0] : null;
+
+        const todayStart = getStartOfDay(today);
         const tomorrow = new Date(todayStart);
         tomorrow.setDate(tomorrow.getDate() + 1);
         const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        firstDayOfMonth.setHours(0, 0, 0, 0);
 
-        if (userRole === 'STUDENT') {
-            return this._getStudentStats(userId, firstDayOfMonth, today);
-        }
+        try {
+            if (userRole === 'STUDENT') {
+                const stats = await this._getStudentStats(userId, firstDayOfMonth, today);
+                return { ...stats, todayEvent };
+            }
 
-        if (userRole === 'TEACHER') {
-            return this._getTeacherStats(userId, todayStart);
-        }
+            if (userRole === 'TEACHER') {
+                const stats = await this._getTeacherStats(userId, todayStart);
+                return { ...stats, todayEvent };
+            }
 
-        if (userRole === 'ACCOUNTANT') {
-            return this._getAccountantStats(today, tomorrow);
-        }
+            if (userRole === 'ACCOUNTANT') {
+                const stats = await this._getAccountantStats(today, tomorrow);
+                return { ...stats, todayEvent };
+            }
 
-        if (userRole === 'ADMISSION_MANAGER') {
-            return this._getAdmissionManagerStats(todayStart, tomorrow);
-        }
+            if (userRole === 'ADMISSION_MANAGER') {
+                const stats = await this._getAdmissionManagerStats(todayStart, tomorrow);
+                return { ...stats, todayEvent };
+            }
 
-        if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
-            return this._getAdminStats(todayStart, tomorrow);
+            if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
+                const stats = await this._getAdminStats(todayStart, tomorrow);
+                return { ...stats, todayEvent };
+            }
+        } catch (error) {
+            logger.error(`Error in getDashboardStats for role ${userRole}:`, error);
+            // Return minimal fallback stats if requested role fails
+            return { role: userRole, error: 'Partial data failure', todayEvent };
         }
 
         throw new Error(`Unsupported role: ${userRole}`);
@@ -41,7 +57,7 @@ class DashboardService {
         if (!student) throw new Error('Student record not found');
 
         const attendanceRecords = await DashboardRepository.getStudentAttendance(student.id, firstDayOfMonth);
-        
+
         const uniqueDaysCount = new Set(attendanceRecords.map(r => r.date.toISOString().split('T')[0])).size;
         const presentDaysCount = new Set(
             attendanceRecords
@@ -60,6 +76,11 @@ class DashboardService {
             pendingFees,
             nextExam: nextExam ? { name: nextExam.name, date: nextExam.startDate } : null,
             booksDue,
+            transport: student.transportAllocation ? {
+                route: student.transportAllocation.route.name,
+                stop: student.transportAllocation.stop.name,
+                time: student.transportAllocation.stop.arrivalTime
+            } : null,
             role: 'STUDENT'
         };
     }
@@ -68,30 +89,28 @@ class DashboardService {
         const teacher = await DashboardRepository.getTeacherById(userId);
         if (!teacher) throw new Error('Teacher record not found');
 
-        const myClass = await DashboardRepository.getClassByTeacher(teacher.id);
-        const subjectCount = await DashboardRepository.countUsersByRole('TEACHER', true); // This seems wrong in original code, but I'll stick to it for now or fix it. Original code used count on subjectTeacher.
-        
-        // Fix: Use the correct repository method for subject teacher count
-        // (Wait, I didn't add countSubjectTeacher to repo yet, let me use a more generic one or add it later)
-        // For now I'll use placeholders that match original logic but cleaned up.
-        
-        const scheduledSlots = await DashboardRepository.getTimetableSlots(teacher.id, todayStart.getDay());
+        const [myClass, subjectCount, scheduledSlots] = await Promise.all([
+            DashboardRepository.getClassByTeacher(teacher.id),
+            DashboardRepository.countSubjectTeachers(teacher.id),
+            DashboardRepository.getTimetableSlots(teacher.id, todayStart.getDay())
+        ]);
+
         const sectionIds = scheduledSlots.map(s => s.sectionId);
-        const markedSlots = await DashboardRepository.countAttendanceSlots(todayStart, sectionIds);
-        
+        const markedSlots = sectionIds.length > 0 ? await DashboardRepository.countAttendanceSlots(todayStart, sectionIds) : 0;
+
         const classesToday = scheduledSlots.length;
         const pendingAttendance = Math.max(0, classesToday - markedSlots);
 
         const classStudents = myClass ? await DashboardRepository.getClassStudents(myClass.id) : [];
         const studentIds = classStudents.map(s => s.id);
-        const overdueBooks = await DashboardRepository.countOverdueBooks(studentIds.length > 0 ? studentIds : 'none', teacher.id);
+        const overdueBooks = await DashboardRepository.countOverdueBooks(studentIds.length > 0 ? studentIds : [], teacher.id);
 
         return {
             isClassTeacher: !!myClass,
             myClassId: myClass ? myClass.id : null,
             myClassName: myClass ? myClass.name : null,
-            myClassStudents: myClass ? myClass._count.students : 0,
-            subjectCount: 0, // Should be implemented
+            myClassStudents: myClass?._count?.students || 0,
+            subjectCount: subjectCount || 0,
             classesToday,
             pendingAttendance,
             overdueBooks,
@@ -110,19 +129,19 @@ class DashboardService {
 
         return {
             role: 'ACCOUNTANT',
-            todayCollection: parseFloat(todayColl?._sum?.amount || 0),
-            yearCollection: parseFloat(yearColl?._sum?.amount || 0),
-            pendingAmount: parseFloat(pendingAmt?._sum?.amount || 0),
-            txToday,
+            todayCollection: parseFloat(todayColl?._sum?.amount || 0) || 0,
+            yearCollection: parseFloat(yearColl?._sum?.amount || 0) || 0,
+            pendingAmount: parseFloat(pendingAmt?._sum?.amount || 0) || 0,
+            txToday: txToday || 0,
         };
     }
 
     async getAccountantStats() {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
+        const today = getSchoolDate();
+        const todayStart = getStartOfDay(today);
+        const tomorrow = new Date(todayStart);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         const [stats, todayPayments, modeBreakdown] = await Promise.all([
             this._getAccountantStats(today, tomorrow),
             DashboardRepository.getRecentFeePayments(50, null), // Detailed list for accountant
@@ -201,75 +220,102 @@ class DashboardService {
         const lastMonthStart = new Date(thisMonthStart);
         lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
 
-        const [totalStudents, totalTeachers, totalClasses, teachersThisMonth, teachersLastMonth] = await Promise.all([
+        // Core Counts
+        const countsResults = await Promise.allSettled([
             DashboardRepository.countUsersByRole('STUDENT'),
             DashboardRepository.countUsersByRole('TEACHER'),
             DashboardRepository.countClasses(),
-            DashboardRepository.countUsersByRole('TEACHER', true), // Should filter by date ideally
-            DashboardRepository.countUsersByRole('TEACHER', true), 
+            DashboardRepository.countAdmissions(thisMonthStart), // studentsThisMonth
+            DashboardRepository.countAdmissions(lastMonthStart, thisMonthStart), // studentsLastMonth
         ]);
 
-        // ... truncated for brevity in this step, but I will implement the full logic
-        // I'll just put a placeholder and finish it in the next multi_replace or similar.
-        // Actually, I can just write the whole thing.
-        
-        const [recentAdmissions, totalAtt, presentAtt] = await Promise.all([
-            DashboardRepository.countAdmissions(thisMonthStart),
-            DashboardRepository.countAttendanceRecords(todayStart, tomorrow),
-            DashboardRepository.countAttendanceRecords(todayStart, tomorrow, ['PRESENT', 'LATE']),
-        ]);
+        const [totalStudents, totalTeachers, totalClasses, studentsThisMonth, studentsLastMonth] = countsResults.map(r => r.status === 'fulfilled' ? r.value : 0);
 
-        const [pendingFeeCount, upcomingExamCount, overdueBooks] = await Promise.all([
-            DashboardRepository.countFeeTransactions('PENDING'),
-            DashboardRepository.countUpcomingExams(todayStart, new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000)),
-            DashboardRepository.countLibraryIssuesByStatus('OVERDUE'),
-        ]);
-
-        const [thisMonthFee, lastMonthFee, studentsThisMonth, studentsLastMonth, thisMonthAttPresent, lastMonthAttPresent, thisMonthAttTotal, lastMonthAttTotal] = await Promise.all([
+        // Financial & Attendance Trends
+        const trendResults = await Promise.allSettled([
             DashboardRepository.getFeeSum('COMPLETED', thisMonthStart),
             DashboardRepository.getFeeSum('COMPLETED', lastMonthStart, thisMonthStart),
-            DashboardRepository.countAdmissions(thisMonthStart),
-            DashboardRepository.countAdmissions(lastMonthStart, thisMonthStart),
             DashboardRepository.aggregateAttendance(thisMonthStart, null, ['PRESENT', 'LATE']),
             DashboardRepository.aggregateAttendance(lastMonthStart, thisMonthStart, ['PRESENT', 'LATE']),
             DashboardRepository.countAttendanceRecords(thisMonthStart),
             DashboardRepository.countAttendanceRecords(lastMonthStart, thisMonthStart),
+            DashboardRepository.countAttendanceRecords(todayStart, tomorrow), // totalAttToday
+            DashboardRepository.countAttendanceRecords(todayStart, tomorrow, ['PRESENT', 'LATE']), // presentAttToday
         ]);
 
-        const attendanceToday = totalAtt > 0 ? parseFloat(((presentAtt / totalAtt) * 100).toFixed(1)) : 0;
-        const thisMonthAvg = thisMonthAttTotal > 0 ? (thisMonthAttPresent._count.id / thisMonthAttTotal) : 0;
-        const lastMonthAvg = lastMonthAttTotal > 0 ? (lastMonthAttPresent._count.id / lastMonthAttTotal) : 0;
+        const [thisMonthFee, lastMonthFee, thisMonthAttPresent, lastMonthAttPresent, thisMonthAttTotal, lastMonthAttTotal, totalAttToday, presentAttToday] = trendResults.map(r => r.status === 'fulfilled' ? r.value : null);
+
+        // Operational Metrics
+        const opResults = await Promise.allSettled([
+            DashboardRepository.countFeeTransactions('PENDING'),
+            DashboardRepository.countUpcomingExams(todayStart, new Date(todayStart.getTime() + 30 * 24 * 60 * 60 * 1000)),
+            DashboardRepository.countLibraryIssuesByStatus('OVERDUE'),
+            DashboardRepository.countMarkedAttendanceSlots(todayStart),
+            DashboardRepository.countTotalSections(),
+        ]);
+
+        const [pendingFeeCount, upcomingExamCount, overdueBooks, markedSections, totalSectionsCount] = opResults.map(r => r.status === 'fulfilled' ? r.value : 0);
+
+        // Calculations
+        const attendanceToday = totalAttToday > 0 ? parseFloat(((presentAttToday / totalAttToday) * 100).toFixed(1)) : 0;
+
+        const thisMonthAvg = thisMonthAttTotal > 0 ? ((thisMonthAttPresent?._count?.id || 0) / thisMonthAttTotal) : 0;
+        const lastMonthAvg = lastMonthAttTotal > 0 ? ((lastMonthAttPresent?._count?.id || 0) / lastMonthAttTotal) : 0;
         const attendanceChange = lastMonthAvg > 0 ? parseFloat(((thisMonthAvg - lastMonthAvg) / lastMonthAvg * 100).toFixed(1)) : 0;
 
         const thisMonthFeesAmount = parseFloat(thisMonthFee?._sum?.amount || 0);
         const lastMonthFeesAmount = parseFloat(lastMonthFee?._sum?.amount || 0);
         const feesChange = lastMonthFeesAmount > 0 ? parseFloat(((thisMonthFeesAmount - lastMonthFeesAmount) / lastMonthFeesAmount * 100).toFixed(1)) : 0;
 
-        const studentsChange = studentsLastMonth > 0
-            ? parseFloat(((studentsThisMonth / studentsLastMonth) * 100).toFixed(1))
-            : 0;
-
-        const teachersChange = teachersLastMonth > 0
-            ? parseFloat(((teachersThisMonth / teachersLastMonth) * 100).toFixed(1))
-            : 0;
+        const studentsChange = studentsLastMonth > 0 ? parseFloat(((studentsThisMonth - studentsLastMonth) / studentsLastMonth * 100).toFixed(1)) : 0;
 
         return {
-            totalStudents,
-            activeStudents: totalStudents,
-            totalTeachers,
-            totalClasses,
-            attendanceToday,
-            attendanceChange,
-            feesCollected: thisMonthFeesAmount,
-            feesChange,
-            studentsChange,
-            teachersChange,
-            recentAdmissions,
-            pendingFeeCount,
-            upcomingExamCount,
-            overdueBooks,
+            totalStudents: totalStudents || 0,
+            totalTeachers: totalTeachers || 0,
+            totalClasses: totalClasses || 0,
+            attendanceToday: attendanceToday || 0,
+            attendanceChange: attendanceChange || 0,
+            attendanceDetails: {
+                marked: markedSections || 0,
+                total: totalSectionsCount || 0
+            },
+            feesCollected: thisMonthFeesAmount || 0,
+            feesChange: feesChange || 0,
+            studentsChange: studentsChange || 0,
+            recentAdmissions: studentsThisMonth || 0,
+            upcomingExamCount: upcomingExamCount || 0,
+            overdueBooks: overdueBooks || 0,
+            transport: await this._getTransportOverallStats(),
             role: 'ADMIN'
         };
+    }
+
+    async _getTransportOverallStats() {
+        try {
+            const [totalVehicles, activeTrips, totalAllocations] = await Promise.all([
+                DashboardRepository.countVehicles(),
+                DashboardRepository.countActiveTrips(),
+                this.countTransportAllocations()
+            ]);
+
+            return {
+                totalVehicles,
+                activeTrips,
+                totalAllocations,
+                onRoad: activeTrips > 0
+            };
+        } catch (err) {
+            logger.error('Error fetching transport stats:', err);
+            return { totalVehicles: 0, activeTrips: 0, totalAllocations: 0, onRoad: false };
+        }
+    }
+
+    async getAttendanceTrendData(startDate, classId, studentId) {
+        return DashboardRepository.getAttendanceTrendData(startDate, classId, studentId);
+    }
+
+    async countTransportAllocations() {
+        return DashboardRepository.countTransportAllocations();
     }
 
     async getRecentActivities(userRole, userId, limit = 10) {
@@ -353,7 +399,7 @@ class DashboardService {
     }
 
     async getUpcomingExams(userId, userRole, limit = 10) {
-        const today = new Date();
+        const today = getSchoolDate();
         let classFilter = {};
 
         if (userRole === 'STUDENT') {
@@ -387,7 +433,7 @@ class DashboardService {
         const activeFeeStructures = await DashboardRepository.getActiveFeeStructures();
         const totalExpected = activeFeeStructures.reduce((sum, s) => sum + parseFloat(s.totalAmount || 0), 0);
         const collectedThisMonth = await DashboardRepository.getFeeSum('COMPLETED', thisMonthStart);
-        
+
         const collected = collectedThisMonth._sum.amount || 0;
         return {
             totalExpected: parseFloat(totalExpected),
@@ -406,37 +452,26 @@ class DashboardService {
     }
 
     async getAttendanceTrend(classId, studentId) {
-        const days = [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
+        const trendData = await this.getAttendanceTrendData(sevenDaysAgo, classId, studentId);
+
+        // Map results to the 7-day structure
+        const days = [];
         for (let i = 6; i >= 0; i--) {
             const date = new Date(today);
             date.setDate(date.getDate() - i);
-            const nextDate = new Date(date);
-            nextDate.setDate(nextDate.getDate() + 1);
-
-            const where = {
-                date: { gte: date, lt: nextDate },
-                attendeeType: 'STUDENT'
-            };
-
-            if (studentId) {
-                where.studentId = studentId;
-            } else if (classId) {
-                where.student = { currentClassId: classId };
-            }
-
-            const totalWhere = { ...where };
-            const presentWhere = { 
-                ...where, 
-                status: { in: ['PRESENT', 'LATE'] } 
-            };
-
-            const [present, total] = await Promise.all([
-                DashboardRepository.getAttendanceCount(presentWhere),
-                DashboardRepository.getAttendanceCount(totalWhere)
-            ]);
+            const dateKey = date.toISOString().split('T')[0];
+            
+            const dailyStats = trendData.filter(d => d.date.toISOString().split('T')[0] === dateKey);
+            
+            const total = dailyStats.reduce((sum, d) => sum + d._count.id, 0);
+            const present = dailyStats
+                .filter(d => ['PRESENT', 'LATE'].includes(d.status))
+                .reduce((sum, d) => sum + d._count.id, 0);
 
             days.push({
                 date: date.toLocaleDateString('en-US', { weekday: 'short' }),
@@ -491,7 +526,7 @@ class DashboardService {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const start = new Date(d.getFullYear(), d.getMonth(), 1);
             const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-            
+
             const count = await DashboardRepository.countLibraryIssues(null, { start, end });
             months.push({
                 month: d.toLocaleString('default', { month: 'short' }),
@@ -545,7 +580,7 @@ class DashboardService {
     async getFinanceStats() {
         const today = new Date();
         const months = [];
-        
+
         for (let i = 5; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const start = new Date(d.getFullYear(), d.getMonth(), 1);
@@ -553,7 +588,7 @@ class DashboardService {
 
             const incomeRes = await DashboardRepository.getFeeSum('COMPLETED', start, end);
             const pendingRes = await DashboardRepository.getFeeSum('PENDING', start, end);
-            
+
             const income = parseFloat(incomeRes._sum.amount || 0);
             const pending = parseFloat(pendingRes._sum.amount || 0);
             const target = (income + pending) * 0.9; // Target 90% collection
@@ -567,13 +602,13 @@ class DashboardService {
         }
 
         const modeBreakdown = await DashboardRepository.getFeeModeBreakdown();
-        
-        return { 
-            trend: months, 
-            modes: modeBreakdown.map(m => ({ 
-                name: m.paymentMode, 
-                value: parseFloat(m._sum.amount || 0) 
-            })) 
+
+        return {
+            trend: months,
+            modes: modeBreakdown.map(m => ({
+                name: m.paymentMode,
+                value: parseFloat(m._sum.amount || 0)
+            }))
         };
     }
 
@@ -584,9 +619,9 @@ class DashboardService {
         ]);
 
         return {
-            subjectAverages: marks.map(m => ({ 
-                subject: m.subjectName, 
-                average: parseFloat(m._avg.obtainedMarks || 0).toFixed(1) 
+            subjectAverages: marks.map(m => ({
+                subject: m.subjectName,
+                average: parseFloat(m._avg.obtainedMarks || 0).toFixed(1)
             })),
             recentPerformance: results.slice(0, 10).map(r => ({
                 student: r.student.admissionNumber,
@@ -626,13 +661,14 @@ class DashboardService {
  * Helper function to get relative time
  */
 function getRelativeTime(date) {
-    const now = new Date();
+    const now = getSchoolDate();
     const diff = now - new Date(date);
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
     if (minutes < 1) return 'Just now';
+    if (minutes < 0) return 'Just now'; // Handle minor clock skews
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return `${days}d ago`;

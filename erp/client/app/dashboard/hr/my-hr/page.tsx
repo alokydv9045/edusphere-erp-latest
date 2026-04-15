@@ -192,14 +192,14 @@ export default function MyHRPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {myLeaves.length === 0 ? (
+                                    {(myLeaves || []).length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
                                                 No leave requests found.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        myLeaves.map(l => (
+                                        (myLeaves || []).map(l => (
                                             <TableRow key={l.id}>
                                                 <TableCell className="text-sm">
                                                     {new Date(l.startDate).toLocaleDateString()} - {new Date(l.endDate).toLocaleDateString()}
@@ -241,14 +241,14 @@ export default function MyHRPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {myPayrolls.length === 0 ? (
+                                    {(myPayrolls || []).length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                                                 No payslips available yet.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        myPayrolls.map(p => (
+                                        (myPayrolls || []).map(p => (
                                             <TableRow key={p.id}>
                                                 <TableCell className="font-medium">
                                                     {new Date(p.year, p.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}

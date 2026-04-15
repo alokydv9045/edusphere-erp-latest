@@ -99,8 +99,7 @@ export function AccountantDashboard() {
         if (socket) {
             socket.emit('join_dashboard', 'ACCOUNTANT');
             
-            socket.on('FEE_PAYMENT_CREATED', (payment) => {
-                console.log('New fee payment received via socket:', payment);
+            socket.on('FEE_PAYMENT_CREATED', () => {
                 // Re-fetch stats to update trend and summary
                 fetchStats();
             });

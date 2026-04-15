@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { SERVER_BASE_URL } from '@/lib/api/apiConfig';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { academicAPI, teacherAPI, studentAPI } from '@/lib/api';
+import { academicAPI, teacherAPI, studentAPI, timetableAPI } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,10 +20,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Loader2, Edit, Trash2, BookOpen, GraduationCap, Clock, CheckCircle2, Upload, FileText } from 'lucide-react';
+import { 
+  Plus, Loader2, Edit, Trash2, BookOpen, GraduationCap, 
+  Clock, CheckCircle2, Upload, FileText, Wand2, Settings, 
+  ArrowRight, ChevronDown, ChevronUp 
+} from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
+
+import TimetableGrid from '@/components/academic/TimetableGrid';
+import TimetableWizard from '@/components/academic/TimetableWizard';
+import SlotEditDialog from '@/components/academic/SlotEditDialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const selectClass =
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
@@ -82,6 +97,17 @@ export default function AcademicPage() {
   const [timetableForm, setTimetableForm] = useState({ name: '', classId: '', type: 'DAILY' });
   const [deletingTimetable, setDeletingTimetable] = useState<any>(null);
   const [deleteTimetableDialog, setDeleteTimetableDialog] = useState(false);
+
+  // ── Logical Timetable State ──────────────────────────────────────────
+  const [selectedClassForLogic, setSelectedClassForLogic] = useState<string>('');
+  const [selectedSectionForLogic, setSelectedSectionForLogic] = useState<string>('');
+  const [dynamicSchedule, setDynamicSchedule] = useState<any[]>([]);
+  const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [activeSlot, setActiveSlot] = useState<any>(null);
+  const [isPdfArchivesOpen, setIsPdfArchivesOpen] = useState(false);
+  const [generateConfirmDialog, setGenerateConfirmDialog] = useState(false);
 
   const fetchTimetables = useCallback(async () => {
     try {
@@ -145,6 +171,50 @@ export default function AcademicPage() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const fetchDynamicSchedule = useCallback(async (sectionId: string) => {
+    if (!sectionId) return;
+    setIsRefreshingSchedule(true);
+    try {
+      const res = await timetableAPI.getStudentSchedule(sectionId);
+      setDynamicSchedule(res.schedule || []);
+    } catch (error) {
+      console.error('Failed to fetch dynamic schedule:', error);
+    } finally {
+      setIsRefreshingSchedule(false);
+    }
+  }, []);
+
+  const handleGenerateBaseline = async () => {
+    if (!selectedClassForLogic || !selectedSectionForLogic) return;
+    const timetableId = dynamicSchedule[0]?.timetableId || null;
+
+    setIsLoading(true);
+    try {
+      const configRes = await timetableAPI.getConfig(selectedClassForLogic);
+      const configId = configRes.config?.id;
+      if (!configId) {
+        toast({ title: "Config Missing", description: "School timings are not configured for this class yet.", variant: "destructive" });
+        return;
+      }
+      await timetableAPI.generateBaseline(timetableId, configId, selectedClassForLogic);
+      toast({ title: "Timetable Reset", description: "Baseline skeleton generated successfully." });
+      fetchDynamicSchedule(selectedSectionForLogic);
+    } catch (error: any) {
+      toast({ title: "Generation Failed", description: error?.response?.data?.error || "Failed to generate baseline.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSlotLogicClick = (slot: any) => {
+    if (slot.isSpecialSlot) {
+      toast({ title: "Special Slot", description: "Breaks and lunch slots are managed via the Routine Wizard." });
+      return;
+    }
+    setActiveSlot(slot);
+    setIsEditorOpen(true);
   };
 
   const fetchData = useCallback(async () => {
@@ -838,91 +908,199 @@ export default function AcademicPage() {
           </Card>
         </TabsContent>
 
-        {/* ── Timetables Tab (Admin only) ── */}
+        {/* ── Timetables Tab (Unified Management) ── */}
         {canManageAcademics && (
-          <TabsContent value="timetables" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <TabsContent value="timetables" className="space-y-6">
+            {/* 1. Dynamic Schedule Manager */}
+            <Card className="border-none shadow-md bg-white/50 backdrop-blur-sm">
+              <CardHeader className="border-b bg-primary/5">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-primary" />
-                      Uploaded Timetables
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      <Wand2 className="h-5 w-5 text-primary" />
+                      Dynamic Schedule Manager
                     </CardTitle>
-                    <CardDescription>All class timetables — view, download or delete</CardDescription>
+                    <CardDescription>Configure routines and assign subjects to periods</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setUploadDialog(true)}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload New
-                  </Button>
+                  <div className="flex gap-2 w-full md:w-auto">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setIsWizardOpen(true)} 
+                      disabled={!selectedClassForLogic}
+                      className="flex-1 md:flex-none"
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Routine Wizard
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      onClick={() => setGenerateConfirmDialog(true)} 
+                      disabled={!selectedSectionForLogic || isLoading}
+                      className="flex-1 md:flex-none"
+                    >
+                      {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                      Baseline
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                {timetables.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border border-dashed rounded-lg">
-                    <FileText className="h-10 w-10 mb-3 opacity-30" />
-                    <p className="text-sm">No timetables uploaded yet</p>
-                    <Button variant="outline" size="sm" className="mt-3" onClick={() => setUploadDialog(true)}>
-                      <Upload className="mr-2 h-4 w-4" /> Upload Timetable
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Class / Grade</Label>
+                    <Select value={selectedClassForLogic} onValueChange={(val) => {
+                      setSelectedClassForLogic(val);
+                      setSelectedSectionForLogic('');
+                      setDynamicSchedule([]);
+                    }}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Select Grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classes.map((cls) => (
+                          <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Section / Division</Label>
+                    <Select 
+                      value={selectedSectionForLogic} 
+                      onValueChange={(val) => {
+                        setSelectedSectionForLogic(val);
+                        fetchDynamicSchedule(val);
+                      }}
+                      disabled={!selectedClassForLogic}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Select Section" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classes.find(c => c.id === selectedClassForLogic)?.sections?.map((sec: any) => (
+                          <SelectItem key={sec.id} value={sec.id}>Section {sec.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {!selectedSectionForLogic ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center opacity-30 border-2 border-dashed rounded-xl bg-slate-50/50">
+                    <ArrowRight className="h-12 w-12 mb-4 animate-pulse" />
+                    <h3 className="text-lg font-bold">Select Class & Section</h3>
+                    <p className="text-sm max-w-xs mx-auto mt-1">Pick a class and section to start managing the weekly schedule.</p>
+                  </div>
+                ) : isRefreshingSchedule ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+                    <p className="text-sm font-medium">Syncing Schedule...</p>
+                  </div>
+                ) : dynamicSchedule.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-xl bg-slate-50/50">
+                    <Wand2 className="h-12 w-12 text-primary/40 mb-4" />
+                    <h3 className="text-lg font-bold">No Schedule Found</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto mt-1 mb-6">
+                      This section doesn't have a schedule yet. Launch the wizard to create one.
+                    </p>
+                    <Button onClick={() => setIsWizardOpen(true)}>
+                      <Wand2 className="h-4 w-4 mr-2" />
+                      Setup Routine
                     </Button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Class</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Effective From</TableHead>
-                          <TableHead>PDF</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {timetables.map((t: any) => (
-                          <TableRow key={t.id}>
-                            <TableCell className="font-medium">{t.name}</TableCell>
-                            <TableCell>{t.class?.name || '—'}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-[10px] uppercase">{t.type}</Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {t.effectiveFrom ? new Date(t.effectiveFrom).toLocaleDateString('en-IN') : '—'}
-                            </TableCell>
-                            <TableCell>
-                              {t.pdfUrl ? (
-                                <a
-                                  href={`${SERVER_BASE_URL}${t.pdfUrl}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-blue-600 hover:text-blue-700">
-                                    <FileText className="h-3.5 w-3.5 mr-1" /> View PDF
-                                  </Button>
-                                </a>
-                              ) : (
-                                <span className="text-xs text-muted-foreground italic">No file</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => { setDeletingTimetable(t); setDeleteTimetableDialog(true); }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  <div className="animate-in fade-in duration-500">
+                    <TimetableGrid 
+                      schedule={dynamicSchedule} 
+                      viewType="admin" 
+                      onSlotClick={handleSlotLogicClick}
+                    />
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            {/* 2. PDF Archives (Legacy System) */}
+            <div className="pt-4">
+              <Button 
+                variant="ghost" 
+                className="w-full flex items-center justify-between p-4 bg-white border shadow-sm rounded-xl hover:bg-slate-50"
+                onClick={() => setIsPdfArchivesOpen(!isPdfArchivesOpen)}
+              >
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  <span className="font-semibold">Uploaded Timetables (PDF Archives)</span>
+                  <Badge variant="secondary" className="ml-2">{timetables.length}</Badge>
+                </div>
+                {isPdfArchivesOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+              </Button>
+
+              {isPdfArchivesOpen && (
+                <Card className="mt-4 border-none shadow-md overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                  <CardHeader className="bg-slate-50/50 pb-4 border-b">
+                     <div className="flex justify-between items-center">
+                        <CardDescription>Manage static PDF schedules for download or print.</CardDescription>
+                        <Button size="sm" onClick={() => setUploadDialog(true)}>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload PDF
+                        </Button>
+                     </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {timetables.length === 0 ? (
+                      <div className="p-12 text-center text-muted-foreground">
+                        <FileText className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                        <p className="text-sm italic">No PDF archives found.</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader className="bg-slate-50/30">
+                          <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Class</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>PDF File</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {timetables.map((t: any) => (
+                            <TableRow key={t.id}>
+                              <TableCell className="font-medium">{t.name}</TableCell>
+                              <TableCell>{t.class?.name || '—'}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-[10px] uppercase">{t.type}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                {t.pdfUrl && (
+                                  <a href={`${SERVER_BASE_URL}${t.pdfUrl}`} target="_blank" rel="noopener noreferrer">
+                                    <Button size="sm" variant="ghost" className="h-7 px-2 text-blue-600">
+                                      <FileText className="h-3.5 w-3.5 mr-1" /> View
+                                    </Button>
+                                  </a>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:bg-destructive/10"
+                                  onClick={() => { setDeletingTimetable(t); setDeleteTimetableDialog(true); }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
         )}
         {/* ── Exams Tab ── */}
@@ -1339,6 +1517,35 @@ export default function AcademicPage() {
           } finally {
             setIsSubmitting(false);
           }
+        }}
+      />
+      <TimetableWizard 
+        isOpen={isWizardOpen} 
+        onClose={() => setIsWizardOpen(false)}
+        classId={selectedClassForLogic}
+        academicYearId={classes.find(c => c.id === selectedClassForLogic)?.academicYearId || ''}
+        onSuccess={() => {
+          setIsWizardOpen(false);
+          handleGenerateBaseline();
+        }}
+      />
+
+      <SlotEditDialog 
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
+        slot={activeSlot}
+        classId={selectedClassForLogic}
+        onSuccess={() => fetchDynamicSchedule(selectedSectionForLogic)}
+      />
+
+      <DeleteConfirmDialog
+        open={generateConfirmDialog}
+        onOpenChange={setGenerateConfirmDialog}
+        title="Reset to Baseline?"
+        description="This will PERMANENTLY DELETE all current subject assignments for this section and recreate the empty skeleton based on school timings. This action cannot be undone."
+        onConfirm={() => {
+          setGenerateConfirmDialog(false);
+          handleGenerateBaseline();
         }}
       />
     </div>

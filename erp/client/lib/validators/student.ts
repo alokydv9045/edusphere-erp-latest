@@ -55,6 +55,8 @@ export const studentRegistrationSchema = z.object({
     city: z.string().min(2, "City is required"),
     state: z.string().min(2, "State is required"),
     pincode: z.string().min(6, "Valid Pincode is required"),
+    latitude: z.number().optional().nullable(),
+    longitude: z.number().optional().nullable(),
 
     // RFID
     rfidCardUid: z.string().optional(),

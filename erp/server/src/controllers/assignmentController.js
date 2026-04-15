@@ -1,3 +1,4 @@
+const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const prisma = require('../config/database');
 const asyncHandler = require('../utils/asyncHandler');
 const NotFoundError = require('../errors/NotFoundError');
@@ -7,14 +8,22 @@ const logger = require('../config/logger');
 // Create a new assignment (Teacher only)
 const createAssignment = asyncHandler(async (req, res) => {
   const { title, description, dueDate, subjectId, classId, sectionId } = req.body;
-  const teacherId = req.user.teacherId; // Assuming teacherId is available in req.user after auth
+  const userId = req.user.userId || req.user.id;
 
-  if (!teacherId) {
-    throw new ValidationError('Only teachers can create assignments');
+  // Resolve teacherId from userId
+  const teacher = await prisma.teacher.findFirst({ where: { userId } });
+  if (!teacher) {
+    throw new ValidationError('Teacher profile not found for this user');
   }
+  const teacherId = teacher.id;
 
-  // Handle file upload (path from multer)
-  const filePath = req.file ? `/uploads/assignments/${req.file.filename}` : null;
+  // Handle file upload (path from multer or AI generated)
+  let filePath = req.file ? `/uploads/assignments/${req.file.filename}` : null;
+  
+  // If no file uploaded but AI generated PDF path is provided
+  if (!filePath && req.body.aiPdfPath) {
+    filePath = req.body.aiPdfPath;
+  }
 
   const assignment = await prisma.assignment.create({
     data: {
@@ -69,14 +78,24 @@ const getStudentAssignments = asyncHandler(async (req, res) => {
 
 // Get assignments created by a teacher
 const getTeacherAssignments = asyncHandler(async (req, res) => {
-  const teacherId = req.user.teacherId;
+  const { teacherId, role } = req.user;
 
-  if (!teacherId) {
-    throw new ValidationError('Teacher ID not found');
+  // Roles allowed to see all assignments in the system
+  const managementRoles = ['SUPER_ADMIN', 'ADMIN', 'PRINCIPAL', 'HOD', 'ADMISSION_MANAGER'];
+  const isManagement = managementRoles.includes(role);
+
+  if (!teacherId && !isManagement) {
+    // If not management and not a teacher profile, return error
+    if (role === 'TEACHER') {
+      throw new ValidationError('Teacher profile not linked to your user account');
+    }
+    throw new ValidationError('Insufficient permissions to view teacher assignments');
   }
 
+  const where = isManagement ? {} : { teacherId };
+
   const assignments = await prisma.assignment.findMany({
-    where: { teacherId },
+    where,
     include: {
       subject: { select: { name: true } },
       class: { select: { name: true } },
@@ -121,14 +140,9 @@ const getAssignmentDetails = asyncHandler(async (req, res) => {
 
 // Delete assignment
 const deleteAssignment = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const teacherId = req.user.teacherId;
-
-  const assignment = await prisma.assignment.findUnique({ where: { id } });
-
-  if (!assignment) {
-    throw new NotFoundError('Assignment not found');
-  }
+  // Resolve teacherId from userId
+  const requesterTeacher = await prisma.teacher.findFirst({ where: { userId: req.user.userId || req.user.id } });
+  const teacherId = requesterTeacher ? requesterTeacher.id : null;
 
   if (assignment.teacherId !== teacherId && req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN') {
     throw new ValidationError('You are not authorized to delete this assignment');

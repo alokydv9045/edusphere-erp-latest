@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, X, LayoutDashboard, Users, UserCog, GraduationCap, CalendarCheck, BookOpen, DollarSign, FileText, Package, Bell, Clock, Settings, User, Briefcase, ClipboardCheck, QrCode } from 'lucide-react';
+import { LogOut, X, LayoutDashboard, Users, UserCog, GraduationCap, CalendarCheck, BookOpen, DollarSign, FileText, Package, Bell, Clock, Settings, User, Briefcase, ClipboardCheck, QrCode, Bus } from 'lucide-react';
 import { schoolConfigAPI } from '@/lib/api';
 
 const navigationConfig = [
@@ -24,6 +24,7 @@ const navigationConfig = [
     { name: 'Marks Entry', href: '/dashboard/exams/marks-entry', icon: ClipboardCheck, roles: ['TEACHER'] },
     { name: 'Library', href: '/dashboard/library', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'] },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER'] },
+    { name: 'Transport', href: '/dashboard/transport', icon: Bus, roles: ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'DRIVER', 'STUDENT', 'PARENT', 'ADMISSION_MANAGER'] },
     { name: 'My Schedule', href: '/dashboard/schedule', icon: Clock, roles: ['TEACHER'] },
     { name: 'Announcements', href: '/dashboard/announcements', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT'] },
     { name: 'Services', href: '/dashboard/services', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'STUDENT'] },

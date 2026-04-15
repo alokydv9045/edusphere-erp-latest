@@ -1,6 +1,8 @@
+const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const { checkGeofence } = require('../utils/geoUtils');
 const { parseQRPayload } = require('../utils/qrGenerator');
 const AttendanceRepository = require('../repositories/AttendanceRepository');
+const CalendarService = require('./CalendarService');
 const { getConfigValue } = require('../utils/configHelper');
 const { DEFAULTS, ATTENDANCE_STATUS, ROLES } = require('../constants');
 const AppError = require('../utils/AppError');
@@ -11,9 +13,8 @@ const AppError = require('../utils/AppError');
 class AttendanceService {
     async markAttendance(data, userId) {
         const { studentId, date, status, scannedByRFID, deviceId, remarks } = data;
-        
-        const attendanceDate = new Date(date);
-        attendanceDate.setHours(0, 0, 0, 0);
+
+        const attendanceDate = getStartOfDay(date);
 
         const existing = await AttendanceRepository.findAttendance(studentId, attendanceDate, ROLES.STUDENT);
         if (existing) throw new AppError('Attendance already marked for this date', 400);
@@ -33,8 +34,7 @@ class AttendanceService {
 
     async getAttendanceByDate(query) {
         const { date, classId, sectionId, attendeeType = ROLES.STUDENT } = query;
-        const attendanceDate = new Date(date);
-        attendanceDate.setHours(0, 0, 0, 0);
+        const attendanceDate = getStartOfDay(date);
 
         if (attendeeType === ROLES.STUDENT) {
             const studentWhere = {};
@@ -107,19 +107,24 @@ class AttendanceService {
         if (!rfidCard || !rfidCard.isActive) throw new AppError('Invalid or inactive RFID card', 404);
         if (!rfidCard.studentId) throw new AppError('Card not assigned to student', 400);
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = getStartOfDay();
 
         const existing = await AttendanceRepository.findAttendance(rfidCard.studentId, today, ROLES.STUDENT);
         if (existing) {
-            const updated = await AttendanceRepository.updateAttendance(existing.id, { checkOutTime: new Date() });
+            // Anti-Stutter: Prevent checkout if check-in was < 5 mins ago
+            const minutesSinceCheckIn = (getSchoolDate() - new Date(existing.checkInTime)) / (1000 * 60);
+            if (minutesSinceCheckIn < 5) {
+                return { message: 'Already checked in recently. Please wait before checking out.', attendance: existing, student: rfidCard.student, action: 'none' };
+            }
+
+            const updated = await AttendanceRepository.updateAttendance(existing.id, { checkOutTime: getSchoolDate() });
             return { message: 'Check-out recorded', attendance: updated, student: rfidCard.student, action: 'checkout' };
         }
 
-        const now = new Date();
+        const now = getSchoolDate();
         const schoolStartTime = await getConfigValue('school_start_time', DEFAULTS.SCHOOL_START_TIME);
         const [hours, minutes] = schoolStartTime.split(':');
-        const startTime = new Date(today);
+        const startTime = getStartOfDay();
         startTime.setHours(parseInt(hours), parseInt(minutes), 0);
 
         const isLate = now > startTime;
@@ -139,8 +144,7 @@ class AttendanceService {
     }
 
     async bulkMarkAttendance(date, attendanceData, userId) {
-        const attendanceDate = new Date(date);
-        attendanceDate.setHours(0, 0, 0, 0);
+        const attendanceDate = getStartOfDay(date);
 
         const existingRecords = await AttendanceRepository.findAttendanceRecords({
             date: attendanceDate,
@@ -151,17 +155,19 @@ class AttendanceService {
         const existingMap = new Map();
         existingRecords.forEach(r => existingMap.set(r.studentId, r));
 
-        const results = await Promise.all(attendanceData.map(async ({ studentId, status }) => {
+        const results = [];
+        for (const { studentId, status } of attendanceData) {
             try {
                 const existing = existingMap.get(studentId);
+                let result;
                 if (existing) {
-                    return await AttendanceRepository.updateAttendance(existing.id, {
+                    result = await AttendanceRepository.updateAttendance(existing.id, {
                         status,
                         checkInTime: (status === ATTENDANCE_STATUS.PRESENT || status === ATTENDANCE_STATUS.LATE) ? new Date() : null,
                         markedBy: userId
                     });
                 } else {
-                    return await AttendanceRepository.createAttendance({
+                    result = await AttendanceRepository.createAttendance({
                         studentId,
                         attendeeType: ROLES.STUDENT,
                         date: attendanceDate,
@@ -170,10 +176,11 @@ class AttendanceService {
                         markedBy: userId
                     });
                 }
+                results.push(result);
             } catch (err) {
-                return { studentId, error: err.message };
+                results.push({ studentId, error: err.message });
             }
-        }));
+        }
 
         return {
             successful: results.filter(r => !r.error).length,
@@ -211,7 +218,7 @@ class AttendanceService {
                     absent: studentRecords.filter(r => r.status === ATTENDANCE_STATUS.ABSENT).length,
                     late: studentRecords.filter(r => r.status === ATTENDANCE_STATUS.LATE).length,
                     percentage: studentRecords.length > 0
-                        ? (((studentRecords.filter(r => r.status === ATTENDANCE_STATUS.PRESENT).length + 
+                        ? (((studentRecords.filter(r => r.status === ATTENDANCE_STATUS.PRESENT).length +
                             studentRecords.filter(r => r.status === ATTENDANCE_STATUS.LATE).length) / studentRecords.length) * 100).toFixed(2)
                         : 0
                 }
@@ -223,8 +230,7 @@ class AttendanceService {
 
     async createSlot(data, userId) {
         const { date, classId, sectionId, subjectId, attendeeType } = data;
-        const slotDate = new Date(date);
-        slotDate.setHours(0, 0, 0, 0);
+        const slotDate = getStartOfDay(date);
         const type = attendeeType || ROLES.STUDENT;
 
         const existing = await AttendanceRepository.findAttendanceSlot({
@@ -252,9 +258,7 @@ class AttendanceService {
         const { date, classId, subjectId, attendeeType } = query;
         const where = {};
         if (date) {
-            const d = new Date(date);
-            d.setHours(0, 0, 0, 0);
-            where.date = d;
+            where.date = getStartOfDay(date);
         }
         if (classId) where.classId = classId;
         if (subjectId) where.subjectId = subjectId;
@@ -341,11 +345,11 @@ class AttendanceService {
     }
     async submitStaffAttendance(data, userId) {
         const { date, attendanceData, attendeeType } = data;
-        const attendanceDate = new Date(date);
-        attendanceDate.setHours(0, 0, 0, 0);
+        const attendanceDate = getStartOfDay(date);
+        const userIds = attendanceData.map(d => d.userId);
 
         await AttendanceRepository.executeTransaction(async (tx) => {
-            const userIds = attendanceData.map(d => d.userId);
+            // 1. Batch delete existing records
             if (attendeeType === ROLES.TEACHER) {
                 await tx.attendanceRecord.deleteMany({
                     where: { date: attendanceDate, attendeeType: ROLES.TEACHER, teacher: { userId: { in: userIds } } }
@@ -356,29 +360,28 @@ class AttendanceService {
                 });
             }
 
-            const records = [];
-            for (const d of attendanceData) {
-                let entityId = null;
-                if (attendeeType === ROLES.TEACHER) {
-                    const teacher = await tx.teacher.findUnique({ where: { userId: d.userId } });
-                    if (teacher) entityId = teacher.id;
-                } else {
-                    const staff = await tx.staff.findUnique({ where: { userId: d.userId } });
-                    if (staff) entityId = staff.id;
-                }
+            // 2. Batch fetch entity IDs
+            let entities = [];
+            if (attendeeType === ROLES.TEACHER) {
+                entities = await tx.teacher.findMany({ where: { userId: { in: userIds } }, select: { id: true, userId: true } });
+            } else {
+                entities = await tx.staff.findMany({ where: { userId: { in: userIds } }, select: { id: true, userId: true } });
+            }
 
-                if (!entityId) continue;
+            const entityMap = new Map(entities.map(e => [e.userId, e.id]));
 
-                records.push({
+            // 3. Prepare bulk data
+            const records = attendanceData
+                .filter(d => entityMap.has(d.userId))
+                .map(d => ({
                     attendeeType,
-                    ...(attendeeType === ROLES.TEACHER ? { teacherId: entityId } : { staffId: entityId }),
+                    ...(attendeeType === ROLES.TEACHER ? { teacherId: entityMap.get(d.userId) } : { staffId: entityMap.get(d.userId) }),
                     date: attendanceDate,
                     status: d.status,
                     remarks: d.remarks || null,
                     markedBy: userId,
                     checkInTime: (d.status === ATTENDANCE_STATUS.PRESENT || d.status === ATTENDANCE_STATUS.LATE) ? new Date() : null
-                });
-            }
+                }));
 
             if (records.length > 0) {
                 await tx.attendanceRecord.createMany({ data: records });
@@ -401,8 +404,16 @@ class AttendanceService {
         const scanUser = await AttendanceRepository.findUserById(scanUserId);
         if (!scanUser || !scanUser.isActive) throw new AppError('User not found or inactive', 404);
 
-        if (!scanner.allowedRoles.includes(scanUser.role)) {
-            throw new AppError(`This scanner is not configured for ${scanUser.role} role`, 403);
+        const isStudent = scanUser.role === ROLES.STUDENT;
+        const isTeacher = scanUser.role === ROLES.TEACHER;
+        const isStaff = !isStudent && !isTeacher;
+
+        const userRoles = scanUser.roles || [scanUser.role];
+        const isAuthorized = userRoles.some(r => scanner.allowedRoles.includes(r)) ||
+            (isStaff && scanner.allowedRoles.includes(ROLES.STAFF));
+
+        if (!isAuthorized) {
+            throw new AppError(`This scanner is not configured for your role (${scanUser.role})`, 403);
         }
 
         const assignedScannerId = scanUser.teacher?.assignedScannerId || scanUser.staff?.assignedScannerId;
@@ -417,52 +428,52 @@ class AttendanceService {
             if (!isInside) throw new AppError('You are outside the allowed scanning area', 403);
         }
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = getStartOfDay();
 
         const entityId = scanUser.student?.id || scanUser.teacher?.id || scanUser.staff?.id;
         const attendeeType = scanUser.role === ROLES.STUDENT ? ROLES.STUDENT : (scanUser.role === ROLES.TEACHER ? ROLES.TEACHER : ROLES.STAFF);
 
-        // Auto-handle slot
-        let slotId = null;
-        const effectiveClassId = classId || scanUser.student?.currentClassId || null;
-        const effectiveSectionId = sectionId || scanUser.student?.sectionId || null;
+        const effectiveClassId = scanUser.student?.currentClassId || classId;
+        const effectiveSectionId = scanUser.student?.sectionId || sectionId;
 
-        // Upsert slot using repository (I'll need to add a method for this or use transact)
-        const slot = await AttendanceRepository.findAttendanceSlot({
-            date: today,
-            attendeeType,
-            classId: effectiveClassId,
-            sectionId: effectiveSectionId
-        }) || await AttendanceRepository.createAttendanceSlot({
+        // Atomic Upsert: Handles concurrent scan race conditions
+        const slot = await AttendanceRepository.upsertAttendanceSlot({
             date: today,
             attendeeType,
             classId: effectiveClassId,
             sectionId: effectiveSectionId,
+            subjectId: null, // Scanners currently handle general daily attendance
             createdBy: scanner.createdBy || userId,
             status: 'OPEN'
         });
-        slotId = slot.id;
+        const slotId = slot.id;
 
         const existing = await AttendanceRepository.findAttendance(entityId, today, attendeeType);
 
         if (action === 'checkout' || (existing && !existing.checkOutTime)) {
-             if (!existing) throw new AppError('No check-in record found for today', 400);
-             if (existing.checkOutTime) throw new AppError('Already checked out', 400);
-             const updated = await AttendanceRepository.updateAttendance(existing.id, { 
-                 checkOutTime: new Date(),
-                 scanLatitude: scanLat,
-                 scanLongitude: scanLng
-             });
-             return { message: 'Check-out recorded', attendance: updated, user: scanUser, action: 'checkout' };
+            if (!existing) throw new AppError('No check-in record found for today', 400);
+            if (existing.checkOutTime) throw new AppError('Already checked out', 400);
+
+            // Anti-Stutter: Prevent checkout if check-in was < 5 mins ago
+            const minutesSinceCheckIn = (getSchoolDate() - new Date(existing.checkInTime)) / (1000 * 60);
+            if (minutesSinceCheckIn < 5) {
+                return { message: 'Already checked in recently. Please wait before checking out.', attendance: existing, user: scanUser, action: 'none' };
+            }
+
+            const updated = await AttendanceRepository.updateAttendance(existing.id, {
+                checkOutTime: getSchoolDate(),
+                scanLatitude: scanLat,
+                scanLongitude: scanLng
+            });
+            return { message: 'Check-out recorded', attendance: updated, user: scanUser, action: 'checkout' };
         }
 
         if (existing) throw new AppError('Attendance already marked for today', 400);
 
-        const now = new Date();
+        const now = getSchoolDate();
         const schoolStartTime = await getConfigValue('school_start_time', DEFAULTS.SCHOOL_START_TIME);
         const [hours, minutes] = schoolStartTime.split(':');
-        const startTime = new Date(today);
+        const startTime = getStartOfDay();
         startTime.setHours(parseInt(hours), parseInt(minutes), 0);
 
         const isLate = now > startTime;
@@ -516,19 +527,25 @@ class AttendanceService {
             dateStudentMap[dateKey][r.studentId] = r.status;
         });
 
+        // Optimization: Fetch all holidays in range at once
+        const holidaySet = await CalendarService.getNonWorkingDaysInRange(start, end);
+
         const dailyBreakdown = [];
         const cursor = new Date(start);
         while (cursor <= end) {
             const dateKey = cursor.toISOString().split('T')[0];
             const dayRecords = dateStudentMap[dateKey] || {};
             const statuses = Object.values(dayRecords);
-            const isWeekend = cursor.getDay() === 0 || cursor.getDay() === 6;
+
+            const dayOfWeek = cursor.getDay();
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+            const isNonWorkingDay = isWeekend || holidaySet.has(dateKey);
 
             dailyBreakdown.push({
                 date: dateKey,
                 dayLabel: cursor.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
                 dayName: cursor.toLocaleDateString('en-IN', { weekday: 'short' }),
-                isWeekend,
+                isNonWorkingDay,
                 marked: statuses.length > 0,
                 present: statuses.filter(s => s === ATTENDANCE_STATUS.PRESENT).length,
                 absent: statuses.filter(s => s === ATTENDANCE_STATUS.ABSENT).length,
@@ -559,7 +576,7 @@ class AttendanceService {
         });
 
         const markedDays = dailyBreakdown.filter(d => d.marked).length;
-        const workingDays = dailyBreakdown.filter(d => !d.isWeekend).length;
+        const workingDays = dailyBreakdown.filter(d => !d.isNonWorkingDay).length;
         const totalPresents = dailyBreakdown.reduce((acc, d) => acc + (d.present + d.late), 0);
         const totalPossible = workingDays * students.length;
         const avgAttendancePct = totalPossible > 0 ? Math.round((totalPresents / totalPossible) * 100) : 0;

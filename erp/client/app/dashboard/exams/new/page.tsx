@@ -226,9 +226,7 @@ export default function NewExamPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{typeof error === "string" ? error : JSON.stringify(error)}</div>
             )}
 
             <div className="grid gap-6 md:grid-cols-2">

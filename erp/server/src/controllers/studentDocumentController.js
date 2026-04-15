@@ -19,10 +19,16 @@ const upload = multer({
 const uploadDocument = asyncHandler(async (req, res) => {
     return new Promise((resolve, reject) => {
         upload(req, res, async (err) => {
-            if (err) return res.status(400).json({ error: err.message });
+            if (err) return res.status(400).json({ 
+                success: false,
+                message: err.message 
+            });
             
             try {
-                if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+                if (!req.file) return res.status(400).json({ 
+                    success: false,
+                    message: 'No file uploaded' 
+                });
 
                 const { id: studentId } = req.params;
                 const { documentType, documentName } = req.body;
@@ -30,14 +36,20 @@ const uploadDocument = asyncHandler(async (req, res) => {
                 if (!documentType || !documentName) {
                     // Clean up temp file
                     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-                    return res.status(400).json({ error: 'documentType and documentName are required' });
+                    return res.status(400).json({ 
+                        success: false,
+                        message: 'documentType and documentName are required' 
+                    });
                 }
 
                 // Verify student exists
                 const student = await prisma.student.findUnique({ where: { id: studentId } });
                 if (!student) {
                     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-                    return res.status(404).json({ error: 'Student not found' });
+                    return res.status(404).json({ 
+                        success: false,
+                        message: 'Student not found' 
+                    });
                 }
 
                 // Upload to Cloudinary
@@ -61,6 +73,7 @@ const uploadDocument = asyncHandler(async (req, res) => {
                 if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
                 res.status(201).json({
+                    success: true,
                     message: 'Document uploaded successfully',
                     document,
                 });
@@ -70,7 +83,10 @@ const uploadDocument = asyncHandler(async (req, res) => {
                 if (req.file && fs.existsSync(req.file.path)) {
                     fs.unlinkSync(req.file.path);
                 }
-                res.status(500).json({ error: 'Internal server error' });
+                res.status(500).json({ 
+                    success: false,
+                    message: 'Internal server error' 
+                });
                 resolve(); // Resolve because we handled the error manually to ensure file cleanup
             }
         });
@@ -84,11 +100,30 @@ const uploadDocument = asyncHandler(async (req, res) => {
 const getStudentDocuments = asyncHandler(async (req, res) => {
     const { id: studentId } = req.params;
 
-    // Check permissions: Student can see own, Admin/Teacher can see any
-    if (req.user.role === 'STUDENT') {
+    // Check permissions: Student can see own, Parent can see linked student
+    if (req.user.role === 'STUDENT' || (req.user.roles && req.user.roles.includes('PARENT'))) {
         const student = await prisma.student.findUnique({ where: { userId: req.user.id } });
         if (!student || student.id !== studentId) {
-            return res.status(403).json({ error: 'Access denied' });
+            return res.status(403).json({ 
+                success: false,
+                message: 'Access denied' 
+            });
+        }
+    }
+
+    // Teacher check: Only class teacher can view documents
+    if (req.user.role === 'TEACHER') {
+        const teacher = await prisma.teacher.findUnique({ 
+            where: { userId: req.user.id },
+            include: { assignedClass: true }
+        });
+        const student = await prisma.student.findUnique({ where: { id: studentId } });
+        
+        if (!teacher || !student || teacher.assignedClass?.id !== student.currentClassId) {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Access denied: You are only allowed to view documents for your assigned class.' 
+            });
         }
     }
 
@@ -97,7 +132,10 @@ const getStudentDocuments = asyncHandler(async (req, res) => {
         orderBy: { uploadedAt: 'desc' },
     });
 
-    res.json({ documents });
+    res.status(200).json({ 
+        success: true,
+        documents 
+    });
 });
 
 /**
@@ -113,16 +151,25 @@ const deleteDocument = asyncHandler(async (req, res) => {
     });
 
     if (!document) {
-        return res.status(404).json({ error: 'Document not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Document not found' 
+        });
     }
 
     // Permissions: Only owner (if student) or Admin can delete
     if (req.user.role === 'STUDENT') {
         if (document.student.userId !== req.user.id) {
-            return res.status(403).json({ error: 'Access denied' });
+            return res.status(403).json({ 
+                success: false,
+                message: 'Access denied' 
+            });
         }
     } else if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Access denied' });
+        return res.status(403).json({ 
+            success: false,
+            message: 'Access denied' 
+        });
     }
 
     // Extract public ID from Cloudinary URL
@@ -136,7 +183,10 @@ const deleteDocument = asyncHandler(async (req, res) => {
     // Delete from database
     await prisma.studentDocument.delete({ where: { id: documentId } });
 
-    res.json({ message: 'Document deleted successfully' });
+    res.status(200).json({ 
+        success: true,
+        message: 'Document deleted successfully' 
+    });
 });
 
 module.exports = {

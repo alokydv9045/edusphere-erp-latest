@@ -31,7 +31,7 @@ const getScanners = asyncHandler(async (req, res) => {
             },
         });
 
-        res.json({ success: true, scanners });
+        res.status(200).json({ success: true, scanners });
 });
 
 // ── Create scanner ───────────────────────────────────────────────────
@@ -97,7 +97,7 @@ const getScannerById = asyncHandler(async (req, res) => {
             return res.status(404).json({ success: false, message: 'Scanner not found' });
         }
 
-        res.json({ success: true, scanner });
+        res.status(200).json({ success: true, scanner });
 });
 
 // ── Update scanner ───────────────────────────────────────────────────
@@ -131,7 +131,7 @@ const updateScanner = asyncHandler(async (req, res) => {
         if (isActive !== undefined) data.isActive = isActive;
 
         const scanner = await prisma.qRScanner.update({ where: { id }, data });
-        res.json({ success: true, message: 'Scanner updated successfully', scanner });
+        res.status(200).json({ success: true, message: 'Scanner updated successfully', scanner });
 });
 
 // ── Delete scanner (soft) ────────────────────────────────────────────
@@ -144,7 +144,7 @@ const deleteScanner = asyncHandler(async (req, res) => {
         }
 
         await prisma.qRScanner.update({ where: { id }, data: { isActive: false } });
-        res.json({ success: true, message: 'Scanner deactivated successfully' });
+        res.status(200).json({ success: true, message: 'Scanner deactivated successfully' });
 });
 
 // ── Get scanner stats ────────────────────────────────────────────────
@@ -176,7 +176,7 @@ const getScannerStats = asyncHandler(async (req, res) => {
             }),
         ]);
 
-        res.json({
+        res.status(200).json({
             success: true,
             stats: { totalScans, todayScans, monthScans, lastScan },
         });

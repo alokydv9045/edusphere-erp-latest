@@ -1,4 +1,5 @@
 const feeRepo = require('../repositories/feeRepository');
+const prisma = require('../config/database');
 const NotFoundError = require('../errors/NotFoundError');
 const ValidationError = require('../errors/ValidationError');
 const logger = require('../config/logger');
@@ -150,7 +151,8 @@ class FeeService {
             throw new ValidationError(`An active fee structure named '${data.name}' already exists for this class and academic year`);
         }
 
-        const totalAmount = data.feeHeads.reduce((sum, head) => sum + parseFloat(head.amount || 0), 0);
+        const feeHeads = data.feeHeads || [];
+        const totalAmount = feeHeads.reduce((sum, head) => sum + parseFloat(head.amount || 0), 0);
 
         const feeStructureData = {
             name: data.name,
@@ -163,7 +165,7 @@ class FeeService {
             earlyPaymentDiscount: parseFloat(data.earlyPaymentDiscount || 0),
             latePaymentPenalty: parseFloat(data.latePaymentPenalty || 0),
             items: {
-                create: data.feeHeads.map(item => ({
+                create: feeHeads.map(item => ({
                     headName: item.headName,
                     amount: parseFloat(item.amount || 0),
                 })),
@@ -308,6 +310,15 @@ class FeeService {
         const parsedAmount = parseFloat(data.amount);
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             throw new ValidationError('Invalid amount value');
+        }
+        // Financial Idempotency Check: Prevent duplicate transaction entries
+        if (data.transactionId && data.paymentMode !== 'CASH') {
+            const existingPayment = await prisma.feePayment.findFirst({
+                where: { transactionId: data.transactionId }
+            });
+            if (existingPayment) {
+                throw new ValidationError(`Transaction ID '${data.transactionId}' has already been processed.`);
+            }
         }
 
         const result = await feeRepo.createFeePaymentTx(

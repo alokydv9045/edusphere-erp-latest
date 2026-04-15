@@ -32,6 +32,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { SERVER_BASE_URL } from '@/lib/api/apiConfig';
 import { format } from 'date-fns';
+import SmartAssignmentModal from '@/components/dashboard/SmartAssignmentModal';
+import { Sparkles, Wand2 } from 'lucide-react';
 
 const selectClass =
   'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
@@ -61,6 +63,8 @@ export default function TeacherAssignmentsPage() {
     sectionId: '',
   });
   const [file, setFile] = useState<File | null>(null);
+  const [smartModalOpen, setSmartModalOpen] = useState(false);
+  const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
 
   const [gradeForm, setGradeForm] = useState({
     grade: '',
@@ -111,12 +115,14 @@ export default function TeacherAssignmentsPage() {
       formData.append('classId', form.classId);
       if (form.sectionId) formData.append('sectionId', form.sectionId);
       if (file) formData.append('file', file);
+      if (generatedPdfUrl && !file) formData.append('aiPdfPath', generatedPdfUrl);
 
       await assignmentAPI.createAssignment(formData);
       toast({ title: 'Success', description: 'Assignment created successfully' });
       setCreateDialogOpen(false);
       setForm({ title: '', description: '', dueDate: '', subjectId: '', classId: '', sectionId: '' });
       setFile(null);
+      setGeneratedPdfUrl(null); // Clear AI generated PDF
       fetchAssignments();
     } catch (err: any) {
       toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to create assignment', variant: 'destructive' });
@@ -273,13 +279,61 @@ export default function TeacherAssignmentsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="file">Reference File (Optional)</Label>
-                <Input
-                  id="file"
-                  type="file"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                />
+                <div className="flex justify-between items-center">
+                   <Label htmlFor="file">Reference File (Optional)</Label>
+                   <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 text-[10px] text-primary hover:text-primary/80 hover:bg-primary/5 flex items-center gap-1"
+                    onClick={() => setSmartModalOpen(true)}
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Smart Assistant (AI)
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    id="file"
+                    type="file"
+                    className="flex-1"
+                    onChange={(e) => {
+                      setFile(e.target.files?.[0] || null);
+                      setGeneratedPdfUrl(null); // Clear AI pdf if manual file selected
+                    }}
+                    disabled={!!generatedPdfUrl}
+                  />
+                  {generatedPdfUrl && (
+                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 flex items-center gap-1 whitespace-nowrap">
+                      <CheckCircle2 className="h-3 w-3" />
+                      AI Reference Added
+                    </Badge>
+                  )}
+                </div>
+                {generatedPdfUrl && (
+                  <p className="text-[10px] text-muted-foreground"> EduSphere AI has generated a PDF reference material. It will be attached when you create the assignment.</p>
+                )}
               </div>
+
+              <SmartAssignmentModal 
+                open={smartModalOpen}
+                onOpenChange={setSmartModalOpen}
+                initialData={{
+                  subject: subjects.find(s => s.id === form.subjectId)?.name,
+                  className: classes.find(c => c.id === form.classId)?.name
+                }}
+                onApply={(data) => {
+                  setForm({
+                    ...form,
+                    title: form.title || data.topic,
+                    description: data.description
+                  });
+                  setGeneratedPdfUrl(data.pdfUrl);
+                  // In a real flow, we'd need to handle the file upload for this generated URL
+                  // For now, we'll assume the backend will link it if we send the pdfUrl in formData
+                  toast({ title: 'AI Content Applied', description: 'Form description and reference file have been updated.' });
+                }}
+              />
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={isSubmitting}>

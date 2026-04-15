@@ -109,9 +109,7 @@ export default function OverdueBooksPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : error ? (
-            <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{typeof error === "string" ? error : JSON.stringify(error)}</div>
           ) : overdueBooks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <CheckCircle2 className="mb-4 h-12 w-12 text-green-500 opacity-50" />

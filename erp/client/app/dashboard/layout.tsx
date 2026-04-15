@@ -37,14 +37,14 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
+    <div className="flex flex-col h-screen overflow-hidden bg-background/95 backdrop-blur-sm">
       <TopAnnouncementBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar className="hidden lg:flex" />
+      <div className="flex flex-1 overflow-hidden transition-all duration-300">
+        <Sidebar className="hidden lg:flex transition-opacity duration-500 ease-in-out" />
         <MobileSidebar open={isMobileMenuOpen} setOpen={setIsMobileMenuOpen} />
         <div className="flex flex-1 flex-col overflow-hidden w-full max-w-full">
-          <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+          <Header onMenuClick={() => setIsMobileMenuOpen(true)} className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b shadow-sm" />
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/20 dark:bg-slate-900/10 custom-scrollbar scroll-smooth">{children}</main>
         </div>
       </div>
     </div>

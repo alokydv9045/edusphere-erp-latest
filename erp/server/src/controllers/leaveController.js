@@ -1,3 +1,4 @@
+const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const prisma = require('../config/database');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../config/logger');
@@ -8,8 +9,13 @@ const { ROLES } = require('../constants');
  */
 const countWorkingDays = (startDate, endDate) => {
     let count = 0;
+    // Anchor to 12:00 PM to avoid DST/Timezone edge cases during iteration
     const cursor = new Date(startDate);
+    cursor.setHours(12, 0, 0, 0);
+    
     const end = new Date(endDate);
+    end.setHours(12, 0, 0, 0);
+
     while (cursor <= end) {
         const day = cursor.getDay();
         if (day !== 0 && day !== 6) count++; // Skip Sunday (0) and Saturday (6)
@@ -23,7 +29,10 @@ const initializeLeaveBalances = asyncHandler(async (req, res) => {
     const { employeeId, academicYearId } = req.body;
 
     if (!employeeId || !academicYearId) {
-        return res.status(400).json({ error: 'Employee ID and Academic Year ID are required' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Employee ID and Academic Year ID are required' 
+        });
     }
 
     // Default quotas (could be moved to a config table later)
@@ -56,7 +65,11 @@ const initializeLeaveBalances = asyncHandler(async (req, res) => {
         })
     );
 
-    res.json({ message: 'Leave balances initialized', balances });
+    res.status(200).json({ 
+        success: true,
+        message: 'Leave balances initialized', 
+        balances 
+    });
 });
 
 // Get leave balances for an employee (with auto-initialization)
@@ -68,7 +81,12 @@ const getMyBalances = asyncHandler(async (req, res) => {
     let targetYearId = academicYearId;
     if (!targetYearId) {
         const currentYear = await prisma.academicYear.findFirst({ where: { isCurrent: true } });
-        if (!currentYear) return res.status(404).json({ error: 'No current academic year found' });
+        if (!currentYear) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'No current academic year found' 
+            });
+        }
         targetYearId = currentYear.id;
     }
 
@@ -106,7 +124,10 @@ const getMyBalances = asyncHandler(async (req, res) => {
         });
     }
 
-    res.json({ balances });
+    res.status(200).json({ 
+        success: true,
+        balances 
+    });
 });
 
 // Submit a leave request — uses metadata JSON to store leaveType reliably
@@ -115,12 +136,31 @@ const createLeaveRequest = asyncHandler(async (req, res) => {
     const { leaveType, startDate, endDate, reason, priority = 'NORMAL' } = req.body;
 
     if (!leaveType || !startDate || !endDate || !reason) {
-        return res.status(400).json({ error: 'Required fields missing' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required fields missing' 
+        });
     }
 
     // 1. Verify balance
     const currentYear = await prisma.academicYear.findFirst({ where: { isCurrent: true } });
-    if (!currentYear) return res.status(400).json({ error: 'No current academic year found' });
+    if (!currentYear) {
+        return res.status(400).json({ 
+            success: false,
+            message: 'No current academic year found' 
+        });
+    }
+
+    const today = getSchoolDate();
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (start < getStartOfDay(today)) {
+        return res.status(400).json({ 
+            success: false,
+            message: 'Cannot apply for leave in the past' 
+        });
+    }
 
     let balance = await prisma.leaveBalance.findFirst({
         where: {
@@ -146,19 +186,26 @@ const createLeaveRequest = asyncHandler(async (req, res) => {
     }
 
     if (leaveType !== 'UNPAID' && (!balance || (balance.total - balance.used - balance.pending) <= 0)) {
-        return res.status(400).json({ error: `Insufficient ${leaveType} balance` });
+        return res.status(400).json({ 
+            success: false,
+            message: `Insufficient ${leaveType} balance` 
+        });
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
     const days = countWorkingDays(start, end);
 
     if (days <= 0) {
-        return res.status(400).json({ error: 'Leave period must include at least one working day' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Leave period must include at least one working day' 
+        });
     }
 
     if (leaveType !== 'UNPAID' && (balance.total - balance.used - balance.pending) < days) {
-        return res.status(400).json({ error: `Requested ${days} working days exceeds remaining balance` });
+        return res.status(400).json({ 
+            success: false,
+            message: `Requested ${days} working days exceeds remaining balance` 
+        });
     }
 
     // 2. Create the service request — store leaveType in metadata (JSON field)
@@ -188,7 +235,11 @@ const createLeaveRequest = asyncHandler(async (req, res) => {
     }
 
     logger.info(`Leave request ${request.requestNumber} created by user ${userId} for ${days} working days`);
-    res.status(201).json({ message: 'Leave request submitted', request });
+    res.status(201).json({ 
+        success: true,
+        message: 'Leave request submitted', 
+        request 
+    });
 });
 
 /**
@@ -202,7 +253,10 @@ const processLeaveRequest = asyncHandler(async (req, res) => {
     const { status, remarks } = req.body; // status: APPROVED or REJECTED
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
-        return res.status(400).json({ error: 'Status must be APPROVED or REJECTED' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Status must be APPROVED or REJECTED' 
+        });
     }
 
     const request = await prisma.serviceRequest.findUnique({
@@ -211,17 +265,26 @@ const processLeaveRequest = asyncHandler(async (req, res) => {
     });
 
     if (!request || request.type !== 'LEAVE') {
-        return res.status(404).json({ error: 'Leave request not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Leave request not found' 
+        });
     }
 
     if (request.status !== 'PENDING_ADMIN' && request.status !== 'PENDING_HOD' && request.status !== 'PENDING_PRINCIPAL') {
-        return res.status(400).json({ error: `This request is already ${request.status}` });
+        return res.status(400).json({ 
+            success: false,
+            message: `This request is already ${request.status}` 
+        });
     }
 
-    // Permission check: ADMIN or SUPER_ADMIN can process any pending leave
-    const approverRoles = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.HR_MANAGER];
+    // Permission check: PRINCIPAL, HOD, ADMIN or SUPER_ADMIN can process leave
+    const approverRoles = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.HR_MANAGER, ROLES.PRINCIPAL, ROLES.HOD];
     if (!approverRoles.includes(role)) {
-        return res.status(403).json({ error: 'Only Admin, Super Admin, or HR Manager can process leave requests' });
+        return res.status(403).json({ 
+            success: false,
+            message: 'Unauthorized to process leave requests' 
+        });
     }
 
     // Extract leaveType and days from metadata (Bug #3 fix)
@@ -277,7 +340,11 @@ const processLeaveRequest = asyncHandler(async (req, res) => {
     }
 
     logger.info(`Leave request ${request.requestNumber} ${status} by ${userId}`);
-    res.json({ message: `Leave request ${status.toLowerCase()}`, request: updated });
+    res.status(200).json({ 
+        success: true,
+        message: `Leave request ${status.toLowerCase()}`, 
+        request: updated 
+    });
 });
 
 module.exports = {

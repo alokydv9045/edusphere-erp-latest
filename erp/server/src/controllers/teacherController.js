@@ -49,6 +49,7 @@ const getTeachers = asyncHandler(async (req, res) => {
   ]);
 
   res.json({
+    success: true,
     teachers,
     pagination: {
       total,
@@ -86,10 +87,16 @@ const getTeacher = asyncHandler(async (req, res) => {
   });
 
   if (!teacher) {
-    return res.status(404).json({ error: 'Teacher not found' });
+    return res.status(404).json({ 
+      success: false,
+      message: 'Teacher not found' 
+    });
   }
-
-  res.json({ teacher });
+  
+  res.json({ 
+    success: true,
+    teacher 
+  });
 });
 
 // Create teacher
@@ -108,7 +115,10 @@ const createTeacher = asyncHandler(async (req, res) => {
   } = req.body;
 
   if (!email || !password || !firstName || !lastName || !employeeId) {
-    return res.status(400).json({ error: 'Required fields missing' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Required fields missing' 
+    });
   }
 
   // Check if employee ID exists
@@ -117,7 +127,10 @@ const createTeacher = asyncHandler(async (req, res) => {
   });
 
   if (existing) {
-    return res.status(400).json({ error: 'Employee ID already exists' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Employee ID already exists' 
+    });
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -147,6 +160,7 @@ const createTeacher = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Teacher created successfully',
     teacher,
   });
@@ -160,7 +174,10 @@ const updateTeacher = asyncHandler(async (req, res) => {
   const teacher = await prisma.teacher.findUnique({ where: { id } });
 
   if (!teacher) {
-    return res.status(404).json({ error: 'Teacher not found' });
+    return res.status(404).json({ 
+      success: false,
+      message: 'Teacher not found' 
+    });
   }
 
   const userUpdates = {};
@@ -193,6 +210,7 @@ const updateTeacher = asyncHandler(async (req, res) => {
   });
 
   res.json({
+    success: true,
     message: 'Teacher updated successfully',
     teacher: updatedTeacher,
   });
@@ -204,7 +222,10 @@ const assignSubject = asyncHandler(async (req, res) => {
   const { subjectId } = req.body;
 
   if (!subjectId) {
-    return res.status(400).json({ error: 'Subject ID is required' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Subject ID is required' 
+    });
   }
 
   const assignment = await prisma.subjectTeacher.create({
@@ -218,6 +239,7 @@ const assignSubject = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
+    success: true,
     message: 'Subject assigned successfully',
     assignment,
   });
@@ -230,7 +252,10 @@ const getMySchedule = asyncHandler(async (req, res) => {
   });
 
   if (!teacher) {
-    return res.status(404).json({ error: 'Teacher profile not found' });
+    return res.status(404).json({ 
+      success: false,
+      message: 'Teacher profile not found' 
+    });
   }
 
   const slots = await prisma.timetableSlot.findMany({
@@ -247,7 +272,10 @@ const getMySchedule = asyncHandler(async (req, res) => {
     ]
   });
 
-  res.json({ schedule: slots });
+  res.json({ 
+    success: true,
+    schedule: slots 
+  });
 });
 
 // Get classes assigned to logged-in teacher
@@ -262,7 +290,10 @@ const getMyClasses = asyncHandler(async (req, res) => {
   });
 
   if (!teacher) {
-    return res.status(404).json({ error: 'Teacher profile not found' });
+    return res.status(404).json({ 
+      success: false,
+      message: 'Teacher profile not found' 
+    });
   }
 
   // A teacher can teach subjects in multiple sections
@@ -308,7 +339,10 @@ const getMyClasses = asyncHandler(async (req, res) => {
     }
   });
 
-  res.json({ classes });
+  res.json({ 
+    success: true,
+    classes 
+  });
 });
 
 module.exports = {

@@ -22,6 +22,7 @@ const getEmployee = asyncHandler(async (req, res) => {
 const createEmployee = asyncHandler(async (req, res) => {
     const employee = await HRService.createEmployee(req.body);
     res.status(201).json({
+        success: true,
         message: 'Employee created successfully',
         employee
     });
@@ -31,7 +32,8 @@ const createEmployee = asyncHandler(async (req, res) => {
 const updateEmployee = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updated = await HRService.updateEmployee(id, req.body);
-    res.json({
+    res.status(200).json({
+        success: true,
         message: 'Employee updated successfully',
         employee: updated
     });
@@ -41,7 +43,8 @@ const updateEmployee = asyncHandler(async (req, res) => {
 const toggleEmployeeStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await HRService.toggleEmployeeStatus(id, req.body);
-    res.json({
+    res.status(200).json({
+        success: true,
         message: `Employee ${result.activated ? 'activated' : 'deactivated'} successfully`
     });
 });

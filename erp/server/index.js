@@ -17,6 +17,7 @@ const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const logger = require('./src/config/logger');
+const cookieParser = require('cookie-parser');
 
 // Routes
 const authRoutes = require('./src/routes/authRoutes');
@@ -42,13 +43,22 @@ const schoolConfigRoutes = require('./src/routes/schoolConfigRoutes');
 const enquiryRoutes = require('./src/routes/enquiryRoutes');
 const scannerRoutes = require('./src/routes/scannerRoutes');
 const assignmentRoutes = require('./src/routes/assignmentRoutes');
+const transportRoutes = require('./src/routes/transportRoutes');
+const calendarRoutes = require('./src/routes/calendarRoutes');
+const timetableRoutes = require('./src/routes/timetableRoutes');
+const backupRoutes = require('./src/routes/backupRoutes');
+const aiRoutes = require('./src/routes/AiRoutes');
 const { initSocket } = require('./src/services/socketService');
+const { initScheduler } = require('./src/config/scheduler');
 const errorHandler = require('./src/middleware/errorHandler');
 
 // Initialize app
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5001;
+
+// Trust proxy for Render's load balancer (needed for rate limiting and secure cookies)
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
@@ -68,6 +78,7 @@ initSocket(server, corsOptions);
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // Compression
 app.use(compression());
@@ -129,6 +140,11 @@ app.use('/api/school-config', schoolConfigRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/scanners', scannerRoutes);
 app.use('/api/assignments', assignmentRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/calendar', calendarRoutes);
+app.use('/api/timetables', timetableRoutes);
+app.use('/api/admin/backups', backupRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -144,4 +160,7 @@ server.listen(PORT, () => {
   logger.info(`🏫 School: ${process.env.SCHOOL_NAME} (${process.env.SCHOOL_ID})`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
+  
+  // Start Backup Scheduler
+  initScheduler();
 });

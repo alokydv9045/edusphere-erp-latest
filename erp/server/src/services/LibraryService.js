@@ -1,7 +1,9 @@
+const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const libraryRepo = require('../repositories/LibraryRepository');
 const { emitEvent } = require('./socketService');
 const NotFoundError = require('../errors/NotFoundError');
 const ValidationError = require('../errors/ValidationError');
+const { getConfigValue } = require('../utils/configHelper');
 
 class LibraryService {
     async getBooks(filters) {
@@ -119,21 +121,21 @@ class LibraryService {
             throw new ValidationError('Book is currently not available for issue');
         }
 
-        // 3. Check student issue limit
-        const activeIssues = await libraryRepo.countActiveIssues(student.id);
-        const maxBooksAllowed = 5; // Could be from config
-        if (activeIssues >= maxBooksAllowed) {
-            throw new ValidationError(`Student has reached maximum limit of ${maxBooksAllowed} books`);
-        }
-
-        const issueDueDate = dueDate ? new Date(dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        const defaultDays = await getConfigValue('library_issue_days', 14);
+        const issueDueDate = dueDate ? new Date(dueDate) : new Date(getSchoolDate().getTime() + parseInt(defaultDays) * 24 * 60 * 60 * 1000);
 
         const result = await libraryRepo.executeTransaction(async (tx) => {
+            // Lock the book record for update to prevent double-issue race conditions
+            const txBook = await tx.book.findUnique({ where: { id: bookId } });
+            if (!txBook || txBook.availableCopies <= 0 || txBook.status !== 'AVAILABLE') {
+                throw new ValidationError('Book is no longer available for issue');
+            }
+
             const issue = await tx.libraryIssue.create({
                 data: {
                     bookId,
                     studentId: student.id,
-                    issueDate: new Date(),
+                    issueDate: getSchoolDate(),
                     dueDate: issueDueDate,
                     status: 'ISSUED',
                     issuedBy,
@@ -144,8 +146,8 @@ class LibraryService {
             await tx.book.update({
                 where: { id: bookId },
                 data: { 
-                    availableCopies: book.availableCopies - 1,
-                    status: book.availableCopies - 1 === 0 ? 'ISSUED' : 'AVAILABLE'
+                    availableCopies: txBook.availableCopies - 1,
+                    status: txBook.availableCopies - 1 === 0 ? 'ISSUED' : 'AVAILABLE'
                 },
             });
 
@@ -165,15 +167,15 @@ class LibraryService {
             throw new ValidationError('Invalid issue record or already returned');
         }
 
-        const returnDate = new Date();
-        const dueDate = new Date(issue.dueDate);
+        const returnDate = getStartOfDay(getSchoolDate());
+        const dueDate = getStartOfDay(new Date(issue.dueDate));
         const isOverdue = returnDate > dueDate;
 
         let fine = 0;
         if (isOverdue) {
-            const daysOverdue = Math.ceil((returnDate - dueDate) / (1000 * 60 * 60 * 24));
-            const finePerDay = 5; // Could be from config
-            fine = daysOverdue * finePerDay;
+            const daysOverdue = Math.round((returnDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+            const finePerDay = await getConfigValue('library_fine_per_day', 5);
+            fine = daysOverdue * parseFloat(finePerDay);
         }
 
         const result = await libraryRepo.executeTransaction(async (tx) => {
@@ -181,8 +183,8 @@ class LibraryService {
                 where: { id: issueId },
                 data: {
                     returnDate,
-                    status: isOverdue ? 'OVERDUE' : 'RETURNED',
-                    fineAmount: fine,
+                    status: 'RETURNED', // Corrected: even if overdue, it's now returned
+                    isOverdue,
                     conditionOnReturn,
                     remarks,
                     returnedBy,
@@ -213,12 +215,8 @@ class LibraryService {
             throw new ValidationError('Active issue record not found');
         }
 
-        const maxRenews = 2; // Could be from config
-        if (issue.renewalCount >= maxRenews) {
-            throw new ValidationError(`Maximum renewal limit of ${maxRenews} reached`);
-        }
-
-        const extendedDueDate = new Date(new Date(issue.dueDate).getTime() + 14 * 24 * 60 * 60 * 1000);
+        const renewalDays = await getConfigValue('library_renewal_days', 14);
+        const extendedDueDate = new Date(new Date(issue.dueDate).getTime() + parseInt(renewalDays) * 24 * 60 * 60 * 1000);
 
         const updatedIssue = await libraryRepo.updateIssue(issueId, {
             dueDate: extendedDueDate,
@@ -298,13 +296,14 @@ class LibraryService {
     }
 
     async getOverdueBooks() {
-        const now = new Date();
+        const now = getSchoolDate();
         const overdueIssues = await libraryRepo.findOverdueIssues(now);
-
-        const finePerDay = 5; // Could be from config
+        const finePerDay = await getConfigValue('library_fine_per_day', 5);
+        
         return overdueIssues.map((issue) => {
-            const daysOverdue = Math.ceil((now - new Date(issue.dueDate)) / (1000 * 60 * 60 * 24));
-            return { ...issue, daysOverdue, calculatedFine: daysOverdue * finePerDay };
+            const issueDueDate = getStartOfDay(new Date(issue.dueDate));
+            const daysOverdue = Math.round((now.getTime() - issueDueDate.getTime()) / (1000 * 60 * 60 * 24));
+            return { ...issue, daysOverdue, calculatedFine: daysOverdue * parseFloat(finePerDay) };
         });
     }
 }

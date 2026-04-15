@@ -1,3 +1,4 @@
+const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const announcementRepo = require('../repositories/AnnouncementRepository');
 const { emitEvent } = require('./socketService');
 const NotFoundError = require('../errors/NotFoundError');
@@ -53,7 +54,7 @@ class AnnouncementService {
             classIds: [],
             priority: finalPriority,
             isPublished: true,
-            publishedAt: new Date(),
+            publishedAt: getSchoolDate(),
             expiresAt: expiryDate ? new Date(expiryDate) : null,
             createdBy: userId,
         });
@@ -96,44 +97,59 @@ class AnnouncementService {
     }
 
     async getActiveAnnouncementsForUser(user) {
-        const { role: userRole } = user;
+        try {
+            const { role: userRole } = user;
+            if (!userRole) return { announcements: [] };
 
-        const roleMap = {
-            'STUDENT': 'STUDENTS',
-            'TEACHER': 'TEACHERS',
-            'PARENT': 'PARENTS',
-            'ACCOUNTANT': 'STAFF',
-            'LIBRARIAN': 'STAFF',
-            'HR_MANAGER': 'STAFF',
-            'INVENTORY_MANAGER': 'STAFF',
-        };
+            const roleMap = {
+                'STUDENT': 'STUDENTS',
+                'TEACHER': 'TEACHERS',
+                'PARENT': 'PARENTS',
+                'ACCOUNTANT': 'STAFF',
+                'LIBRARIAN': 'STAFF',
+                'HR_MANAGER': 'STAFF',
+                'INVENTORY_MANAGER': 'STAFF',
+            };
 
-        const isAdminRole = ['ADMIN', 'SUPER_ADMIN', 'ADMISSION_MANAGER'].includes(userRole);
-        const mappedRole = roleMap[userRole] || userRole;
-        const now = new Date();
+            const isAdminRole = ['ADMIN', 'SUPER_ADMIN', 'ADMISSION_MANAGER'].includes(userRole);
+            const mappedRole = roleMap[userRole] || userRole;
+            const now = getSchoolDate();
 
-        const announcements = await announcementRepo.findActiveAnnouncements({
-            isPublished: true,
-            OR: [
-                { expiresAt: null },
-                { expiresAt: { gte: now } }
-            ],
-        });
+            const announcements = await announcementRepo.findActiveAnnouncements({
+                isPublished: true,
+                OR: [
+                    { expiresAt: null },
+                    { expiresAt: { gte: now } }
+                ],
+            });
 
-        const filteredAnnouncements = announcements.filter(a => {
-            if (isAdminRole) return true;
-            if (!a.targetAudience || a.targetAudience.length === 0) return true;
-            return a.targetAudience.includes(mappedRole) || a.targetAudience.includes(userRole);
-        });
+            const filteredAnnouncements = announcements.filter(a => {
+                if (isAdminRole) return true;
+                
+                // If no specific audience is targetted, it's for everyone
+                if (!a.targetAudience || !Array.isArray(a.targetAudience) || a.targetAudience.length === 0) return true;
+                
+                return a.targetAudience.includes(mappedRole) || 
+                       a.targetAudience.includes(userRole) || 
+                       a.targetAudience.includes('ALL');
+            });
 
-        return { announcements: filteredAnnouncements.map(a => this._formatAnnouncement(a)) };
+            return { announcements: filteredAnnouncements.map(a => this._formatAnnouncement(a)) };
+        } catch (error) {
+            logger.error('Error in getActiveAnnouncementsForUser:', error);
+            return { announcements: [] }; // Fallback to empty list instead of crashing
+        }
     }
 
     _formatAnnouncement(a) {
+        const audience = (a.targetAudience && Array.isArray(a.targetAudience)) 
+            ? (a.targetAudience.length ? a.targetAudience : ['ALL']) 
+            : ['ALL'];
+            
         return {
             ...a,
             isActive: a.isPublished,
-            targetAudience: a.targetAudience.length ? a.targetAudience : ['ALL'],
+            targetAudience: audience,
             expiryDate: a.expiresAt
         };
     }

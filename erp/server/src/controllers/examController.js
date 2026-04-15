@@ -9,27 +9,37 @@ const asyncHandler = require('express-async-handler');
 // Get all exams
 const getExams = asyncHandler(async (req, res) => {
   const result = await ExamService.getExams(req.query);
-  res.json(result);
+  res.status(200).json({ 
+    success: true,
+    ...result 
+  });
 });
 
 // Get teacher's assigned exam tasks
 const getTeacherExams = asyncHandler(async (req, res) => {
   const userId = req.user.userId || req.user.id;
   const result = await ExamService.getTeacherExams(userId);
-  res.json(result);
+  res.status(200).json({ 
+    success: true,
+    ...result 
+  });
 });
 
 // Get single exam
 const getExam = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const result = await ExamService.getExam(id);
-  res.json(result);
+  res.status(200).json({ 
+    success: true,
+    ...result 
+  });
 });
 
 // Create exam
 const createExam = asyncHandler(async (req, res) => {
   const exam = await ExamService.createExam(req.body);
   res.status(201).json({
+    success: true,
     message: 'Exam created successfully',
     exam,
   });
@@ -40,7 +50,8 @@ const updateExam = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const updatedExam = await ExamService.updateExam(id, req.body);
   
-  res.json({
+  res.status(200).json({
+    success: true,
     message: 'Exam updated successfully',
     exam: updatedExam,
   });
@@ -54,7 +65,10 @@ const updateExam = asyncHandler(async (req, res) => {
 const deleteExam = asyncHandler(async (req, res) => {
   const { id } = req.params;
   await ExamService.deleteExam(id);
-  res.json({ message: 'Exam deleted successfully' });
+  res.status(200).json({ 
+    success: true,
+    message: 'Exam deleted successfully' 
+  });
 });
 
 // Add subject to exam
@@ -62,6 +76,7 @@ const addSubjectToExam = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const examSubject = await ExamService.addSubjectToExam(id, req.body);
   res.status(201).json({
+    success: true,
     message: 'Subject added to exam successfully',
     examSubject,
   });
@@ -74,7 +89,8 @@ const enterMarks = asyncHandler(async (req, res) => {
   const userRole = req.user.role;
   
   const result = await ExamService.enterMarks(examId, req.body, userId, userRole);
-  res.json({
+  res.status(200).json({
+    success: true,
     message: `Marks saved for ${result.saved} students`,
     saved: result.saved,
   });
@@ -84,7 +100,10 @@ const enterMarks = asyncHandler(async (req, res) => {
 const getConsolidatedMarks = asyncHandler(async (req, res) => {
   const { examId } = req.params;
   const result = await ExamService.getConsolidatedMarks(examId);
-  res.json(result);
+  res.status(200).json({ 
+    success: true,
+    ...result 
+  });
 });
 
 // Freeze exam
@@ -93,7 +112,11 @@ const freezeExam = asyncHandler(async (req, res) => {
   const userId = req.user?.id || null;
   
   const updated = await ExamService.freezeExam(examId, userId);
-  res.json({ message: 'Exam results frozen', exam: updated });
+  res.status(200).json({ 
+    success: true,
+    message: 'Exam results frozen', 
+    exam: updated 
+  });
 
   emitEvent('EXAM_RESULT_PUBLISHED', { examId: examId, classId: updated.classId });
 });
@@ -102,7 +125,11 @@ const freezeExam = asyncHandler(async (req, res) => {
 const unfreezeExam = asyncHandler(async (req, res) => {
   const { examId } = req.params;
   const updated = await ExamService.unfreezeExam(examId);
-  res.json({ message: 'Exam results unfrozen', exam: updated });
+  res.status(200).json({ 
+    success: true,
+    message: 'Exam results unfrozen', 
+    exam: updated 
+  });
 });
 
 // Legacy submit exam results
@@ -113,6 +140,7 @@ const submitExamResults = asyncHandler(async (req, res) => {
   // I'll leave it as a placeholder pointing to the service if we ever need to fully migrate it.
   const result = await ExamService.createExam(req.body); // Roughly similar to creating results
   res.status(201).json({
+    success: true,
     message: 'Exam results submitted successfully',
     examResult: result,
   });
@@ -121,15 +149,33 @@ const submitExamResults = asyncHandler(async (req, res) => {
 // Get student exam results
 const getStudentExamResults = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
-  const result = await ExamService.getStudentExamResults(studentId, req.query);
-  res.json(result);
+  const userId = req.user.userId || req.user.id;
+  const userRole = req.user.role;
+
+  // IDOR Check: Students can only view their own results
+  if (userRole === 'STUDENT') {
+    const student = await prisma.student.findFirst({ where: { userId } });
+    if (!student || student.id !== studentId) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Forbidden: You can only view your own exam results' 
+      });
+    }
+  }
+
+  res.status(200).json({ 
+    success: true,
+    ...result 
+  });
 });
 
 // Get exam results report
 const getExamResultsReport = asyncHandler(async (req, res) => {
   const { examId } = req.params;
-  const result = await ExamService.getExamResultsReport(examId, req.query);
-  res.json(result);
+  res.status(200).json({ 
+    success: true,
+    ...result 
+  });
 });
 
 module.exports = {

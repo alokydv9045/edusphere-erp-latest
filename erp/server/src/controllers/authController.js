@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/database');
 const asyncHandler = require('../utils/asyncHandler');
-const { VALID_ROLES } = require('../constants');
+const { validateAndNormalizeRoles } = require('../utils/userUtils');
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -10,11 +10,22 @@ const generateToken = (user) => {
       userId: user.id,
       email: user.email,
       role: user.role,
-      roles: user.roles || [user.role], // Include all roles in token
+      roles: (user.roles && user.roles.length > 0) ? user.roles : [user.role],
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+};
+
+const setAuthCookie = (res, token) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matching JWT_EXPIRES_IN fallback)
+    path: '/',
+  };
+  res.cookie('auth_token', token, cookieOptions);
 };
 
 const register = asyncHandler(async (req, res) => {
@@ -25,27 +36,13 @@ const register = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'All fields are required' });
   }
 
-  // Build roles array — merge primary role with any additional roles provided
-  let rolesArray = Array.isArray(rolesFromBody) && rolesFromBody.length > 0
-    ? rolesFromBody
-    : [role];
-
-  // Always ensure the primary role is included
-  if (!rolesArray.includes(role)) {
-    rolesArray = [role, ...rolesArray];
+  // Use centralized role validation & normalization
+  const roleCheck = validateAndNormalizeRoles(rolesFromBody || [role], role);
+  if (!roleCheck.valid) {
+    return res.status(400).json({ error: roleCheck.message });
   }
 
-  // Remove duplicates and validate each role
-  rolesArray = [...new Set(rolesArray)];
-  const invalidRole = rolesArray.find(r => !VALID_ROLES.includes(r));
-  if (invalidRole) {
-    return res.status(400).json({ error: `Invalid role: ${invalidRole}` });
-  }
-
-  // Students cannot have multiple roles
-  if (role === 'STUDENT' && rolesArray.length > 1) {
-    return res.status(400).json({ error: 'Students cannot have multiple roles' });
-  }
+  const { roles: rolesArray } = roleCheck;
 
   // Check if user exists
   const existingUser = await prisma.user.findUnique({
@@ -74,10 +71,11 @@ const register = asyncHandler(async (req, res) => {
 
   // Generate token
   const token = generateToken(user);
+  setAuthCookie(res, token);
 
   res.status(201).json({
+    success: true,
     message: 'User registered successfully',
-    token,
     user: {
       id: user.id,
       email: user.email,
@@ -166,10 +164,11 @@ const login = asyncHandler(async (req, res) => {
     ...user,
     roles: effectiveRoles
   });
+  setAuthCookie(res, token);
 
-  res.json({
+  res.status(200).json({
+    success: true,
     message: 'Login successful',
-    token,
     user: {
       id: user.id,
       email: user.email,
@@ -189,6 +188,16 @@ const login = asyncHandler(async (req, res) => {
       })
     },
   });
+});
+
+const logout = asyncHandler(async (req, res) => {
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+  });
+  res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 
 const getMe = asyncHandler(async (req, res) => {
@@ -218,10 +227,13 @@ const getMe = asyncHandler(async (req, res) => {
   // Ensure roles field exists for backward compatibility
   const userWithRoles = {
     ...user,
-    roles: user.roles && user.roles.length > 0 ? user.roles : [user.role]
+    roles: (user.roles && user.roles.length > 0) ? user.roles : [user.role]
   };
 
-  res.json({ user: userWithRoles });
+  res.status(200).json({ 
+    success: true, 
+    user: userWithRoles 
+  });
 });
 
-module.exports = { register, login, getMe };
+module.exports = { register, login, getMe, logout };

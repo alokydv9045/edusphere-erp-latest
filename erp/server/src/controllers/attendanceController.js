@@ -6,8 +6,12 @@ const { ROLES } = require('../constants');
 // Mark attendance (manual or RFID)
 const markAttendance = asyncHandler(async (req, res) => {
   const attendance = await AttendanceService.markAttendance(req.body, req.user.userId);
-  res.status(201).json({ message: 'Attendance marked successfully', attendance });
-  
+  res.status(201).json({
+    success: true,
+    message: 'Attendance marked successfully',
+    attendance
+  });
+
   emitEvent('ATTENDANCE_MARKED', {
     studentId: attendance.studentId,
     status: attendance.status,
@@ -19,7 +23,10 @@ const markAttendance = asyncHandler(async (req, res) => {
 // Get attendance for a date
 const getAttendanceByDate = asyncHandler(async (req, res) => {
   const result = await AttendanceService.getAttendanceByDate(req.query);
-  res.json(result);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
 });
 
 // RFID scan handler
@@ -28,7 +35,10 @@ const handleRFIDScan = asyncHandler(async (req, res) => {
   const result = await AttendanceService.handleRFIDScan(cardNumber, deviceId);
   const { action, student, attendance } = result;
 
-  res.status(action === 'checkin' ? 201 : 200).json(result);
+  res.status(action === 'checkin' ? 201 : 200).json({
+    success: true,
+    ...result
+  });
 
   if (action === 'checkin') {
     emitEvent('ATTENDANCE_MARKED', {
@@ -45,13 +55,20 @@ const handleRFIDScan = asyncHandler(async (req, res) => {
 const bulkMarkAttendance = asyncHandler(async (req, res) => {
   const { date, attendanceData } = req.body;
   const result = await AttendanceService.bulkMarkAttendance(date, attendanceData, req.user.userId);
-  res.json({ message: `Marked attendance for ${result.successful} students`, ...result });
+  res.status(200).json({
+    success: true,
+    message: `Marked attendance for ${result.successful} students`,
+    ...result
+  });
 });
 
 // Get attendance report
 const getAttendanceReport = asyncHandler(async (req, res) => {
   const result = await AttendanceService.getAttendanceReport(req.query);
-  res.json(result);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
 });
 
 // ── Attendance Slots ─────────────────────────────────────────────────
@@ -59,25 +76,38 @@ const getAttendanceReport = asyncHandler(async (req, res) => {
 // Create a daily attendance slot for a class
 const createSlot = asyncHandler(async (req, res) => {
   const result = await AttendanceService.createSlot(req.body, req.user.userId);
-  res.status(201).json({ message: 'Attendance slot created', slot: result });
+  res.status(201).json({
+    success: true,
+    message: 'Attendance slot created',
+    slot: result
+  });
 });
 
 // List attendance slots
 const getSlots = asyncHandler(async (req, res) => {
   const slots = await AttendanceService.getSlots(req.query);
-  res.json({ slots });
+  res.status(200).json({
+    success: true,
+    slots
+  });
 });
 
 // Get a single slot with its student list and any existing attendance
 const getSlotWithStudents = asyncHandler(async (req, res) => {
   const result = await AttendanceService.getSlotWithEntities(req.params.id);
-  res.json(result);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
 });
 
 // Delete a slot (only if OPEN and no records)
 const deleteSlot = asyncHandler(async (req, res) => {
   await AttendanceService.deleteSlot(req.params.id);
-  res.json({ message: 'Slot deleted successfully' });
+  res.status(200).json({
+    success: true,
+    message: 'Slot deleted successfully'
+  });
 });
 
 // Submit attendance for a slot — single batch transaction
@@ -85,13 +115,21 @@ const submitSlotAttendance = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { attendanceData } = req.body;
   const result = await AttendanceService.submitSlotAttendance(id, attendanceData, req.user.userId);
-  res.json({ message: `Attendance saved for ${result.count} entries`, ...result });
+  res.status(200).json({
+    success: true,
+    message: `Attendance saved for ${result.count} entries`,
+    ...result
+  });
 });
 
 // Submit batch attendance for staff/teachers
 const submitStaffAttendance = asyncHandler(async (req, res) => {
   const result = await AttendanceService.submitStaffAttendance(req.body, req.user.userId);
-  res.json({ message: `Batch attendance saved`, ...result });
+  res.status(200).json({
+    success: true,
+    message: `Batch attendance saved`,
+    ...result
+  });
 });
 
 // QR scan handler — used by kiosk/scanner page
@@ -101,7 +139,10 @@ const handleQRScan = asyncHandler(async (req, res) => {
   const result = await AttendanceService.handleQRScan(req.body, req.user?.userId);
   const { action, user, attendance } = result;
 
-  res.status(action === 'checkin' ? 201 : 200).json(result);
+  res.status(action === 'checkin' ? 201 : 200).json({
+    success: true,
+    ...result
+  });
 
   // Emit real-time event
   emitEvent('ATTENDANCE_MARKED', {
@@ -130,7 +171,10 @@ const handleQRScan = asyncHandler(async (req, res) => {
 // Attendance Analytics (date-wise)
 const getAttendanceAnalytics = asyncHandler(async (req, res) => {
   const result = await AttendanceService.getAttendanceAnalytics(req.query);
-  res.json(result);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
 });
 
 module.exports = {

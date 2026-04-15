@@ -3,18 +3,24 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { teacherAPI } from '@/lib/api';
+import { teacherAPI, timetableAPI } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Mail, Phone, Calendar, Loader2, BookOpen } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Calendar, Loader2, BookOpen, Clock } from 'lucide-react';
+import TimetableGrid from '@/components/academic/TimetableGrid';
+import UserQRCode from '@/components/qr/UserQRCode';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function TeacherDetailPage() {
   const params = useParams();
   const [teacher, setTeacher] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [timetable, setTimetable] = useState<any[]>([]);
+  const [isLoadingTimetable, setIsLoadingTimetable] = useState(false);
+  const { user: currentUser } = useAuth();
 
   useEffect(() => {
     if (params.id) {
@@ -27,10 +33,23 @@ export default function TeacherDetailPage() {
       setIsLoading(true);
       const data = await teacherAPI.getById(id);
       setTeacher(data.teacher);
+      fetchTimetable(id);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch teacher details');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchTimetable = async (teacherId: string) => {
+    try {
+      setIsLoadingTimetable(true);
+      const res = await timetableAPI.getTeacherSchedule(teacherId);
+      setTimetable(res.schedule || []);
+    } catch (err) {
+      console.error('Failed to fetch timetable:', err);
+    } finally {
+      setIsLoadingTimetable(false);
     }
   };
 
@@ -174,10 +193,20 @@ export default function TeacherDetailPage() {
         <TabsContent value="schedule" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Teaching Schedule</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Schedules of Periods
+              </CardTitle>
+              <CardDescription>Your weekly teaching schedule and class assignments.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Class schedule will be displayed here.</p>
+              {isLoadingTimetable ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <TimetableGrid schedule={timetable} viewType="teacher" />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -188,7 +217,28 @@ export default function TeacherDetailPage() {
               <CardTitle>Attendance Records</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Attendance records will be displayed here.</p>
+              <div className="flex flex-col md:flex-row gap-6 items-start">
+                <UserQRCode
+                  userId={teacher.userId}
+                  userName={`${teacher.user.firstName} ${teacher.user.lastName}`}
+                  userRole="TEACHER"
+                  isAdmin={currentUser?.roles?.some(r => ['SUPER_ADMIN', 'ADMIN'].includes(r)) ?? ['SUPER_ADMIN', 'ADMIN'].includes(currentUser?.role ?? '')}
+                />
+                <div className="flex-1">
+                  <div className="rounded-xl border bg-card text-card-foreground shadow">
+                    <div className="flex flex-col space-y-1.5 p-6">
+                      <div className="font-semibold leading-none tracking-tight">QR Code Info</div>
+                      <div className="text-sm text-muted-foreground">This QR code is used for scanning attendance at QR scanner devices</div>
+                    </div>
+                    <div className="p-6 pt-0 space-y-2 text-sm text-muted-foreground">
+                      <p>• Each user has a unique, permanent QR code tied to their account.</p>
+                      <p>• The QR is valid at any active scanner the user's role is allowed on.</p>
+                      <p>• Admins can regenerate the QR if it is lost or compromised.</p>
+                      <p>• GPS geofencing is enforced by the scanner device, not the QR code itself.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -44,7 +44,10 @@ const getServiceRequests = asyncHandler(async (req, res) => {
         orderBy: { createdAt: 'desc' },
     });
 
-    res.json(requests);
+    res.status(200).json({ 
+        success: true,
+        requests 
+    });
 });
 
 // Create a new service request
@@ -53,7 +56,10 @@ const createServiceRequest = asyncHandler(async (req, res) => {
     const { type, subject, description, priority, startDate, endDate, attachmentUrl } = req.body;
 
     if (!type || !subject || !description) {
-        return res.status(400).json({ error: 'Required fields missing' });
+        return res.status(400).json({ 
+            success: false,
+            message: 'Required fields missing' 
+        });
     }
 
     const request = await prisma.serviceRequest.create({
@@ -70,7 +76,11 @@ const createServiceRequest = asyncHandler(async (req, res) => {
         }
     });
 
-    res.status(201).json({ message: 'Request submitted successfully', request });
+    res.status(201).json({ 
+        success: true,
+        message: 'Request submitted successfully', 
+        request 
+    });
 });
 
 // Update request status (Admin/Teacher only)
@@ -82,7 +92,10 @@ const updateServiceRequest = asyncHandler(async (req, res) => {
     const request = await prisma.serviceRequest.findUnique({ where: { id } });
 
     if (!request) {
-        return res.status(404).json({ error: 'Request not found' });
+        return res.status(404).json({ 
+            success: false,
+            message: 'Request not found' 
+        });
     }
 
     const updatedRequest = await prisma.serviceRequest.update({
@@ -114,7 +127,11 @@ const updateServiceRequest = asyncHandler(async (req, res) => {
         }
     });
 
-    res.json({ message: 'Request updated successfully', request: updatedRequest });
+    res.status(200).json({ 
+        success: true,
+        message: 'Request updated successfully', 
+        request: updatedRequest 
+    });
 });
 
 module.exports = {

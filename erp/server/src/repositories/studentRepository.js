@@ -52,6 +52,7 @@ class StudentRepository {
                 },
                 rfidCard: true,
                 documents: true,
+                transportAllocation: { include: { route: true, stop: true } },
             },
         });
     }
@@ -83,6 +84,7 @@ class StudentRepository {
                 },
                 rfidCard: true,
                 documents: true,
+                transportAllocation: { include: { route: true, stop: true } },
             },
         });
     }
@@ -138,11 +140,37 @@ class StudentRepository {
     }
 
     /**
-     * Get the global Prisma client or transaction client
-     * Used for passing the transaction context down from the service
+     * Delete student and clean up orphans (Uses transaction context from service)
      */
-    getClient(tx) {
-        return tx || prisma;
+    async deleteStudentTx(id, tx) {
+        const client = this.getClient(tx);
+
+        // Fetch parent IDs before student is deleted
+        const studentParents = await client.studentParent.findMany({
+            where: { studentId: id },
+            select: { parentId: true }
+        });
+
+        // Delete the student (Prisma schema handles most cascades including studentParent)
+        const deletedStudent = await client.student.delete({
+            where: { id }
+        });
+
+        // Clean up orphaned parents
+        if (studentParents.length > 0) {
+            for (const { parentId } of studentParents) {
+                const otherChildren = await client.studentParent.count({
+                    where: { parentId }
+                });
+
+                if (otherChildren === 0) {
+                    await client.parent.delete({ where: { id: parentId } });
+                    logger.info(`[StudentRepository] Deleted orphaned parent: ${parentId}`);
+                }
+            }
+        }
+
+        return deletedStudent;
     }
 }
 

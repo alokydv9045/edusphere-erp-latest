@@ -16,6 +16,8 @@ const {
   getTeacherExams,
 } = require('../controllers/examController');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const validate = require('../middleware/validate');
+const { examCreateSchema, enterMarksSchema, addSubjectSchema } = require('../validators/examValidator');
 
 const router = express.Router();
 
@@ -30,16 +32,16 @@ router.post('/results', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), submitEx
 router.get('/students/:studentId/results', getStudentExamResults);
 
 // Single exam — wildcard /:id must come LAST in this group
-router.get('/:id', getExam);
-router.post('/', requireRole('SUPER_ADMIN', 'ADMIN'), createExam);
+router.get('/:id', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT'), getExam);
+router.post('/', requireRole('SUPER_ADMIN', 'ADMIN'), validate(examCreateSchema), createExam);
 router.put('/:id', requireRole('SUPER_ADMIN', 'ADMIN'), updateExam);
 router.delete('/:id', requireRole('SUPER_ADMIN', 'ADMIN'), deleteExam);
 
 // Exam subjects
-router.post('/:id/subjects', requireRole('SUPER_ADMIN', 'ADMIN'), addSubjectToExam);
+router.post('/:id/subjects', requireRole('SUPER_ADMIN', 'ADMIN'), validate(addSubjectSchema), addSubjectToExam);
 
 // Marks entry (subject teacher)
-router.post('/:examId/marks', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), enterMarks);
+router.post('/:examId/marks', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), validate(enterMarksSchema), enterMarks);
 
 // Consolidated marks (class teacher / admin)
 router.get('/:examId/consolidated', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), getConsolidatedMarks);
@@ -48,7 +50,7 @@ router.get('/:examId/consolidated', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER
 router.put('/:examId/freeze', requireRole('SUPER_ADMIN', 'ADMIN'), freezeExam);
 router.put('/:examId/unfreeze', requireRole('SUPER_ADMIN', 'ADMIN'), unfreezeExam);
 
-// Exam report
-router.get('/:examId/report', getExamResultsReport);
+// Exam report - restricted to staff
+router.get('/:examId/report', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), getExamResultsReport);
 
 module.exports = router;

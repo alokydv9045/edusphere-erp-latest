@@ -35,7 +35,7 @@ export interface ServiceRequest {
 export const serviceAPI = {
   getAll: async (params?: any): Promise<ServiceRequest[]> => {
     const { data } = await apiClient.get('/services', { params });
-    return data;
+    return data.requests || [];
   },
 
   create: async (requestData: any): Promise<{ message: string, request: ServiceRequest }> => {

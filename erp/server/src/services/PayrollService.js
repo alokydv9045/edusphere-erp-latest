@@ -86,17 +86,15 @@ class PayrollService {
                 requesterId: structure.employeeId,
                 type: 'LEAVE',
                 status: 'APPROVED',
-                OR: [
-                    { startDate: { gte: startDate, lte: endDate } },
-                    { endDate: { gte: startDate, lte: endDate } }
-                ]
+                startDate: { lte: endDate },
+                endDate: { gte: startDate }
             });
 
             let paidLeaveDays = 0;
             approvedLeaves.forEach(leave => {
-                const lStart = new Date(Math.max(leave.startDate, startDate));
-                const lEnd = new Date(Math.min(leave.endDate, endDate));
-                const diff = Math.ceil((lEnd - lStart) / (1000 * 60 * 60 * 24)) + 1;
+                const lStart = new Date(Math.max(new Date(leave.startDate).getTime(), startDate.getTime()));
+                const lEnd = new Date(Math.min(new Date(leave.endDate).getTime(), endDate.getTime()));
+                const diff = Math.round((lEnd - lStart) / (1000 * 60 * 60 * 24)) + 1;
                 if (!leave.subject.includes('UNPAID')) {
                     paidLeaveDays += diff;
                 }
