@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import Link from 'next/link';
 import { 
   Bus, 
   ArrowLeft, 
@@ -129,7 +128,7 @@ export default function VehicleDetailsPage() {
 
       <div className="flex flex-col md:flex-row items-start justify-between gap-10">
         <div className="flex items-center gap-8">
-            <div className="w-24 h-24 bg-slate-100 text-slate-900 rounded-[2.5rem] flex items-center justify-center shadow-inner">
+            <div className="w-24 h-24 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center shadow-2xl">
                 <Bus className="h-12 w-12" />
             </div>
             <div>
@@ -152,11 +151,9 @@ export default function VehicleDetailsPage() {
                 <Plus className="h-5 w-5 mr-2" />
                 Log Service
              </Button>
-             <Link href={`/dashboard/transport/vehicles/${id}/edit`}>
-                 <Button className="h-14 px-10 rounded-2xl bg-slate-900 text-white font-black shadow-2xl shadow-slate-900/30">
-                    Edit Record
-                 </Button>
-             </Link>
+             <Button className="h-14 px-10 rounded-2xl bg-slate-900 text-white font-black shadow-2xl shadow-slate-900/30">
+                Edit Record
+             </Button>
         </div>
       </div>
 
@@ -228,28 +225,28 @@ export default function VehicleDetailsPage() {
         </div>
 
         <div className="space-y-10">
-             <Card className="border-slate-100 shadow-2xl bg-white text-slate-900 rounded-[3rem] p-10 relative overflow-hidden ring-1 ring-slate-100">
-                <div className="absolute top-0 right-0 p-10 opacity-5">
+             <Card className="border-none shadow-2xl bg-slate-900 text-white rounded-[3rem] p-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-10 opacity-10">
                     <User className="h-32 w-32" />
                 </div>
-                <h3 className="text-xl font-black mb-8 relative z-10 text-slate-400 uppercase text-[10px] tracking-widest">Commanding Officer</h3>
+                <h3 className="text-xl font-black mb-8 relative z-10">Commanding Officer</h3>
                 <div className="relative z-10 flex items-center gap-6 mb-8">
-                     <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-2xl font-black text-slate-900">
+                     <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-2xl font-black">
                         {vehicle.primaryDriver?.user?.firstName?.[0] || 'D'}
                      </div>
                      <div>
-                        <p className="text-2xl font-black leading-tight text-slate-900">{vehicle.primaryDriver?.user?.firstName || 'Unassigned'} {vehicle.primaryDriver?.user?.lastName || ''}</p>
-                        <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mt-1">Primary Pilot</p>
+                        <p className="text-2xl font-black leading-tight">{vehicle.primaryDriver?.user?.firstName || 'Unassigned'} {vehicle.primaryDriver?.user?.lastName || ''}</p>
+                        <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mt-1">Primary Pilot</p>
                      </div>
                 </div>
                 <div className="space-y-4 relative z-10">
-                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl text-sm font-medium border border-slate-100">
-                        <span className="opacity-50 font-black text-[10px] uppercase text-slate-400">Contact</span>
-                        <span className="font-bold text-slate-900">{vehicle.primaryDriver?.user?.phone || 'Not Available'}</span>
+                     <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl text-sm font-medium border border-white/10">
+                        <span className="opacity-50 font-black text-[10px] uppercase">Contact</span>
+                        <span className="font-bold">{vehicle.primaryDriver?.user?.phone || 'Not Available'}</span>
                      </div>
-                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl text-sm font-medium border border-slate-100">
-                        <span className="opacity-50 font-black text-[10px] uppercase text-slate-400">Incident Count</span>
-                        <span className="font-black text-emerald-600">Zero</span>
+                     <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl text-sm font-medium border border-white/10">
+                        <span className="opacity-50 font-black text-[10px] uppercase">Incident Count</span>
+                        <span className="font-black text-emerald-400">Zero</span>
                      </div>
                 </div>
              </Card>
@@ -281,10 +278,10 @@ export default function VehicleDetailsPage() {
       <Dialog open={isLogModalOpen} onOpenChange={setIsLogModalOpen}>
           <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden max-w-xl">
               <form onSubmit={handleLogSubmit}>
-                  <div className="bg-slate-50 p-10 text-slate-900 border-b border-slate-100">
+                  <div className="bg-slate-900 p-8 text-white">
                       <DialogHeader>
-                          <DialogTitle className="text-4xl font-black tracking-tighter">Log System Service</DialogTitle>
-                          <DialogDescription className="text-slate-500 font-medium pt-2">Record mechanical maintenance and update odometer.</DialogDescription>
+                          <DialogTitle className="text-3xl font-black tracking-tighter">Log System Service</DialogTitle>
+                          <DialogDescription className="text-slate-400 font-medium pt-2">Record mechanical maintenance and update odometer.</DialogDescription>
                       </DialogHeader>
                   </div>
                   <div className="p-8 space-y-6">

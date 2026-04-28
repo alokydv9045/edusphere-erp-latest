@@ -4,12 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-    ChevronLeft,
-    ChevronRight,
-    Calendar as CalendarIcon,
-    Clock,
-    MapPin,
+import { 
+    ChevronLeft, 
+    ChevronRight, 
+    Calendar as CalendarIcon, 
+    Clock, 
+    MapPin, 
     Plus,
     AlertCircle,
     Star,
@@ -66,9 +66,9 @@ export const CalendarWidget: React.FC = () => {
     const getEventsForDay = (day: number) => {
         return events.filter(e => {
             const eventDate = new Date(e.date);
-            return eventDate.getDate() === day &&
-                eventDate.getMonth() === currentDate.getMonth() &&
-                eventDate.getFullYear() === currentDate.getFullYear();
+            return eventDate.getDate() === day && 
+                   eventDate.getMonth() === currentDate.getMonth() && 
+                   eventDate.getFullYear() === currentDate.getFullYear();
         });
     };
 
@@ -105,7 +105,7 @@ export const CalendarWidget: React.FC = () => {
                             {day}
                         </div>
                     ))}
-
+                    
                     {Array.from({ length: firstDayOfMonth }).map((_, i) => (
                         <div key={`empty-${i}`} className="h-10" />
                     ))}
@@ -113,12 +113,12 @@ export const CalendarWidget: React.FC = () => {
                     {Array.from({ length: daysInMonth }).map((_, i) => {
                         const day = i + 1;
                         const dayEvents = getEventsForDay(day);
-                        const isToday = new Date().getDate() === day &&
-                            new Date().getMonth() === currentDate.getMonth() &&
-                            new Date().getFullYear() === currentDate.getFullYear();
-                        const isSelected = selectedDate.getDate() === day &&
-                            selectedDate.getMonth() === currentDate.getMonth() &&
-                            selectedDate.getFullYear() === currentDate.getFullYear();
+                        const isToday = new Date().getDate() === day && 
+                                       new Date().getMonth() === currentDate.getMonth() && 
+                                       new Date().getFullYear() === currentDate.getFullYear();
+                        const isSelected = selectedDate.getDate() === day && 
+                                          selectedDate.getMonth() === currentDate.getMonth() && 
+                                          selectedDate.getFullYear() === currentDate.getFullYear();
 
                         return (
                             <button
@@ -134,12 +134,12 @@ export const CalendarWidget: React.FC = () => {
                                 {day}
                                 <div className="flex gap-0.5 mt-0.5">
                                     {dayEvents.slice(0, 3).map((e, idx) => (
-                                        <div
-                                            key={idx}
+                                        <div 
+                                            key={idx} 
                                             className={cn(
                                                 "h-1 w-1 rounded-full",
                                                 TYPE_CONFIG[e.type]?.color || 'bg-slate-400'
-                                            )}
+                                            )} 
                                         />
                                     ))}
                                 </div>
@@ -176,8 +176,8 @@ export const CalendarWidget: React.FC = () => {
                             {selectedDayEvents.map(event => {
                                 const cfg = TYPE_CONFIG[event.type];
                                 return (
-                                    <div
-                                        key={event.id}
+                                    <div 
+                                        key={event.id} 
                                         className={cn(
                                             "p-2.5 rounded-xl border flex items-start gap-3 transition-all hover:translate-x-1",
                                             cfg.theme
@@ -218,7 +218,7 @@ export const CalendarWidget: React.FC = () => {
                 {/* View Full Calendar Button */}
                 <Button variant="outline" className="w-full text-xs h-9 mt-auto border-dashed hover:border-solid hover:bg-primary/5 group" asChild>
                     <a href="/dashboard/calendar" className="flex items-center justify-center gap-2">
-                        View Full Academic Schedule
+                        View Full Academic Schedule 
                         <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
                     </a>
                 </Button>

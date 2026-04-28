@@ -26,7 +26,6 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { transportAPI } from '@/lib/api/transport';
 import { socketService } from '@/lib/socket';
-import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 
 export default function TransportDashboard() {
   const router = useRouter();
@@ -40,8 +39,7 @@ export default function TransportDashboard() {
   const isStudentParent = ['STUDENT', 'PARENT'].includes(user?.role || '');
 
   // Use the custom map hook
-  const { isLoaded } = useGoogleMaps();
-  const mapRef = useHubMap(isAdmin, isLoaded);
+  const mapRef = useHubMap(isAdmin);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,15 +49,9 @@ export default function TransportDashboard() {
           await fetchStats();
           const socket = socketService.connect();
           socket.emit('join_dashboard', user?.role);
-          
-          const handleRefresh = () => {
-            console.log('Real-time sync: Refreshing transport stats');
-            fetchStats();
-          };
-
+          const handleRefresh = () => fetchStats();
           socket.on('TRANSPORT_TRIP_STARTED', handleRefresh);
           socket.on('TRANSPORT_TRIP_COMPLETED', handleRefresh);
-          socket.on('TRANSPORT_UPDATE', handleRefresh);
         } else if (isStudentParent) {
           const res = await transportAPI.getMyAllocation();
           if (res.data?.success) setAllocation(res.data.allocation);
@@ -188,8 +180,8 @@ export default function TransportDashboard() {
                       <div ref={mapRef} className="absolute inset-0 bg-slate-50 z-0" />
                       <div className="absolute top-6 left-6 z-10 pointer-events-none">
                           <div className="bg-white/80 backdrop-blur-xl p-4 rounded-2xl border border-white/50 shadow-2xl flex items-center gap-4">
-                              <div className="w-10 h-10 bg-slate-100 text-slate-900 rounded-xl flex items-center justify-center shadow-sm">
-                                  <Globe className="h-5 w-5" />
+                              <div className="w-10 h-10 bg-slate-950 text-white rounded-xl flex items-center justify-center shadow-lg">
+                                  <Globe className="h-5 w-5 animate-pulse" />
                               </div>
                               <div>
                                   <p className="font-black text-slate-900 text-xs leading-none">Hub Satellite</p>
@@ -204,7 +196,7 @@ export default function TransportDashboard() {
       )}
 
       {isStudentParent && (
-        <Card className="border-slate-100 shadow-2xl bg-white text-slate-900 rounded-[3rem] overflow-hidden group ring-1 ring-slate-100">
+        <Card className="border-none shadow-md bg-slate-950 text-white rounded-2xl overflow-hidden group">
             <CardContent className="p-0">
               <div className="grid lg:grid-cols-2">
                 <div className="p-8 md:p-12 space-y-8">
@@ -215,31 +207,31 @@ export default function TransportDashboard() {
                     <h2 className="text-4xl font-bold tracking-tight leading-tight">
                         {allocation ? `Bound for ${allocation.route.name}` : "Transport Protocol Standby"}
                     </h2>
-                    <p className="text-slate-500 text-sm font-medium leading-relaxed max-w-md">
+                    <p className="text-slate-400 text-sm font-medium leading-relaxed max-w-md">
                         {allocation 
                           ? `Your route includes ${allocation.route.stops.length} checkpoints. Pickup scheduled at ${allocation.stop.name}.`
                           : "EduSphere TMS leverages real-time telemetry and geofencing to ensure every journey is tracked and secure."}
                     </p>
                     <Link href="/dashboard/transport/track" className="block w-fit">
-                        <Button className="h-12 px-8 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2">
+                        <Button className="h-12 px-8 bg-white text-slate-950 rounded-xl font-bold hover:bg-slate-100 transition-all flex items-center gap-2">
                             <Navigation className="h-4 w-4" />
                             VIEW LIVE TRACKER
                         </Button>
                     </Link>
                 </div>
-                <div className="bg-slate-50 p-8 md:p-12 flex flex-col justify-center gap-4">
-                    <div className="flex items-center gap-4 p-4 rounded-xl bg-white border border-slate-100 shadow-sm">
-                        <Clock className="h-5 w-5 text-blue-600" />
+                <div className="bg-white/5 p-8 md:p-12 flex flex-col justify-center gap-4">
+                    <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                        <Clock className="h-5 w-5 text-blue-400" />
                         <div>
-                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Scheduled ETA</p>
-                            <p className="font-bold text-xl text-slate-900">{allocation?.stop?.arrivalTime || 'N/A'}</p>
+                            <p className="text-[10px] uppercase font-bold text-white/50 tracking-widest">Scheduled ETA</p>
+                            <p className="font-bold text-xl">{allocation?.stop?.arrivalTime || 'N/A'}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4 p-4 rounded-xl bg-white border border-slate-100 shadow-sm">
-                        <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                    <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                        <ShieldCheck className="h-5 w-5 text-emerald-400" />
                         <div>
-                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Status</p>
-                            <p className="font-bold text-xl uppercase text-slate-900">{allocation?.status || 'Active'}</p>
+                            <p className="text-[10px] uppercase font-bold text-white/50 tracking-widest">Status</p>
+                            <p className="font-bold text-xl uppercase">{allocation?.status || 'Active'}</p>
                         </div>
                     </div>
                 </div>
@@ -250,18 +242,18 @@ export default function TransportDashboard() {
 
       {isDriver && (
         <div className="flex items-center justify-center py-12">
-             <Card className="w-full max-w-xl p-8 md:p-12 rounded-[3rem] border-slate-100 shadow-2xl bg-white text-slate-900 relative overflow-hidden group ring-1 ring-slate-100">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-50" />
+             <Card className="w-full max-w-xl p-8 md:p-12 rounded-2xl border-none shadow-lg bg-slate-900 text-white relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-50" />
                 <div className="relative z-10 text-center space-y-8">
-                    <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto shadow-sm group-hover:rotate-6 transition-transform">
-                        <Zap className="h-8 w-8 text-emerald-600" />
+                    <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mx-auto shadow-xl group-hover:rotate-6 transition-transform">
+                        <Zap className="h-8 w-8 text-emerald-400" />
                     </div>
                     <div className="space-y-2">
-                        <h2 className="text-3xl font-black tracking-tighter">Ready for Duty?</h2>
-                        <p className="text-slate-500 font-medium text-sm leading-relaxed max-w-xs mx-auto">Systems checks complete. Your route matrix is synchronized and awaiting departure.</p>
+                        <h2 className="text-3xl font-bold tracking-tight">Ready for Duty?</h2>
+                        <p className="text-slate-400 font-medium text-sm leading-relaxed max-w-xs mx-auto">Systems checks complete. Your route matrix is synchronized and awaiting departure.</p>
                     </div>
                     <Link href="/dashboard/transport/driver" className="block mx-auto max-w-xs">
-                        <Button className="w-full h-14 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20">
+                        <Button className="w-full h-12 bg-white text-slate-950 rounded-xl font-bold hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
                             <Bus className="h-5 w-5" />
                             START SHIFT
                         </Button>
@@ -286,7 +278,7 @@ export default function TransportDashboard() {
 }
 
 // Map Logic Hook for the Hub
-function useHubMap(isAdmin: boolean, isLoaded: boolean) {
+function useHubMap(isAdmin: boolean) {
   const mapRef = React.useRef<HTMLDivElement>(null);
   const [activeTrips, setActiveTrips] = useState<any[]>([]);
   const [tripsLocation, setTripsLocation] = useState<Record<string, {lat: number, lng: number}>>({});
@@ -338,7 +330,7 @@ function useHubMap(isAdmin: boolean, isLoaded: boolean) {
     const initMap = async () => {
         // @ts-ignore
         const google = window.google;
-        if (!isLoaded || !google) return;
+        if (!google) return;
 
         try {
             const { Map } = await google.maps.importLibrary("maps");

@@ -27,7 +27,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import UserQRCode from '@/components/qr/UserQRCode';
-import TeacherProfileDashboard from '@/components/dashboard/TeacherProfileDashboard';
 
 const ROLE_COLORS: Record<string, string> = {
     SUPER_ADMIN: 'bg-red-100 text-red-700 font-medium',
@@ -257,6 +256,224 @@ export default function ProfilePage() {
     const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
     const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`;
 
+    const renderBasicProfile = () => {
+        return (
+            <div className="space-y-6">
+                {/* 1. Header Profile Summary - Standard Card */}
+                <Card className="w-full shadow-sm">
+                    <CardContent className="p-6">
+                        <div className="flex flex-col md:flex-row items-center gap-6">
+                            <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+                                <Avatar className="h-24 w-24 border-2 border-border/50 shadow-sm transition-opacity hover:opacity-90">
+                                    {user.avatar ? (
+                                        <img src={user.avatar} alt={fullName} className="h-full w-full object-cover rounded-full" />
+                                    ) : (
+                                        <AvatarFallback className="text-3xl font-semibold bg-primary/10 text-primary">
+                                            {initials}
+                                        </AvatarFallback>
+                                    )}
+                                </Avatar>
+                                <div className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-1.5 rounded-full shadow-sm ring-2 ring-background">
+                                    {uploadingAvatar ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                                </div>
+                                <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                            </div>
+                            <div className="flex-1 text-center md:text-left space-y-2">
+                                <div className="flex flex-col md:flex-row md:items-center justify-center md:justify-start gap-3">
+                                    <h2 className="text-2xl font-bold tracking-tight">{fullName}</h2>
+                                    <Badge variant="outline" className={`uppercase ${ROLE_COLORS[user.role] || ''}`}>
+                                        {user.role.replace('_', ' ')}
+                                    </Badge>
+                                </div>
+                                <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-1.5"><Mail className="h-4 w-4" /> {user.email}</div>
+                                    <div className="flex items-center gap-1.5"><Phone className="h-4 w-4" /> {user.phone || 'N/A'}</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+                                <Button variant="outline" className="w-full md:w-auto" onClick={handleAvatarClick}>
+                                    <Camera className="mr-2 h-4 w-4" /> Update Avatar
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 2. Key Stats Row */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Last Session</CardTitle>
+                            <div className="rounded-full bg-blue-100 p-2"><Clock className="h-4 w-4 text-blue-600" /></div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-xl font-bold tracking-tight">{user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Initial session'}</div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Activity Status</CardTitle>
+                            <div className="rounded-full bg-emerald-100 p-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /></div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-xl font-bold tracking-tight">{user.isActive ? 'Active' : 'Offline'}</div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Employment</CardTitle>
+                            <div className="rounded-full bg-purple-100 p-2"><Briefcase className="h-4 w-4 text-purple-600" /></div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-xl font-bold tracking-tight truncate">{user.role.split('_').join(' ')}</div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-l-4 border-l-teal-500 shadow-sm hover:shadow-md transition-shadow">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Joined Date</CardTitle>
+                            <div className="rounded-full bg-teal-100 p-2"><CalendarDays className="h-4 w-4 text-teal-600" /></div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-xl font-bold tracking-tight">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* 3. Detailed Info Grids */}
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    <Card className="col-span-1 md:col-span-2 shadow-sm border-none shadow-md">
+                        <CardHeader className="bg-muted/30 pb-4 border-b">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <User className="h-5 w-5 text-primary" /> Personal Information
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2">
+                                <InfoRow icon={User} label="Gender" value={user.gender || 'Not specified'} valueClass="capitalize" />
+                                <InfoRow icon={Calendar} label="Date of Birth" value={user.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString() : 'Not set'} />
+                                <InfoRow icon={HeartPulse} label="Blood Group" value={user.bloodGroup || 'Not assigned'} />
+                                <InfoRow icon={MapPin} label="Address" value={<span className="text-muted-foreground italic font-normal">{user.address || 'No location registered'}</span>} />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="shadow-sm border-none shadow-md">
+                        <CardHeader className="bg-muted/30 pb-4 border-b">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Award className="h-5 w-5 text-primary" /> Professional Identity
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6 space-y-1">
+                            <InfoRow icon={Award} label="Employee ID" value={staffData?.employeeId || 'ID_PENDING'} valueClass="font-mono" />
+                            <InfoRow icon={Briefcase} label="Designation" value={staffData?.designation || user.role.replace('_', ' ')} />
+                            <InfoRow icon={Building2} label="Department" value={staffData?.department || 'CORE_SYSTEM'} />
+                        </CardContent>
+                    </Card>
+
+                    <Card className="col-span-1 shadow-sm border-none shadow-md">
+                        <CardHeader className="bg-muted/30 pb-4 border-b">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Lock className="h-5 w-5 text-primary" /> Security Status
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6 space-y-4">
+                            <div className="flex flex-col gap-3">
+                                <InfoRow
+                                    icon={Clock}
+                                    label="Last Password Change"
+                                    value={user.lastPasswordChange ? new Date(user.lastPasswordChange).toLocaleDateString() : <span className="text-destructive font-bold">Action Required</span>}
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full gap-2 mt-2"
+                                    onClick={() => setIsPasswordModalOpen(true)}
+                                >
+                                    <Key className="h-4 w-4" /> Change Password
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="col-span-1 md:col-span-2 lg:col-span-3 shadow-sm border-none shadow-md overflow-hidden">
+                        <CardHeader className="bg-primary/5 pb-4 border-b">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <QrCode className="h-5 w-5 text-primary" /> Digital Identity & QR Attendance
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="flex flex-col md:flex-row items-center gap-8">
+                                <div className="bg-white p-4 rounded-xl shadow-inner border flex flex-col items-center gap-3 shrink-0">
+                                    <UserQRCode userId={user.id} userName={fullName} userRole={user.role} isAdmin={isAdmin} />
+                                    <div className="flex flex-col items-center gap-1">
+                                        <Badge variant={qrIssued ? "default" : "secondary"} className="font-mono text-[10px]">
+                                            {qrIssued ? 'ISSUED & LOCKED' : 'DIGITAL ID'}
+                                        </Badge>
+                                        {qrIssuedAt && <span className="text-[9px] text-muted-foreground uppercase">Since {new Date(qrIssuedAt).toLocaleDateString()}</span>}
+                                    </div>
+                                </div>
+                                <div className="flex-1 space-y-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <h4 className="font-bold text-sm flex items-center gap-2">
+                                                <div className={`h-1.5 w-1.5 rounded-full ${qrIssued ? 'bg-emerald-500' : 'bg-primary'}`} /> QR Code Info
+                                                {qrIssued && <Lock className="h-3 w-3 text-muted-foreground inline" />}
+                                            </h4>
+                                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                                This QR code is used for scanning attendance at QR scanner devices located throughout the campus.
+                                            </p>
+                                        </div>
+                                        {isAdmin && (
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Button
+                                                    variant={qrIssued ? "outline" : "default"}
+                                                    size="sm"
+                                                    className="h-8 gap-2"
+                                                    onClick={handleToggleQRLock}
+                                                    disabled={isTogglingLock}
+                                                >
+                                                    {isTogglingLock ? <Loader2 className="h-3 w-3 animate-spin" /> : (qrIssued ? <Key className="h-3 w-3" /> : <Lock className="h-3 w-3" />)}
+                                                    {qrIssued ? 'Unlock for Edit' : 'Lock as Issued'}
+                                                </Button>
+                                                {!qrIssued && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                        onClick={handleRegenerateQR}
+                                                        disabled={isRegeneratingQR}
+                                                    >
+                                                        {isRegeneratingQR ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 rotate-45" />}
+                                                        Regenerate
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <ul className="grid sm:grid-cols-1 gap-3">
+                                        {[
+                                            "Each user has a unique, permanent QR code tied to their account.",
+                                            "The QR is valid at any active scanner the user's role is allowed on.",
+                                            "Admins can regenerate the QR if it is lost or compromised.",
+                                            "GPS geofencing is enforced by the scanner device, not the QR code itself."
+                                        ].map((text, i) => (
+                                            <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                                <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                                                <span>{text}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        );
+    };
 
     const renderStudentDashboard = () => {
         if (loading) {
@@ -550,7 +767,7 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            {isStudent ? renderStudentDashboard() : <TeacherProfileDashboard user={user} staffData={staffData} />}
+            {isStudent ? renderStudentDashboard() : renderBasicProfile()}
 
             {/* ── Change Password Modal ── */}
             <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>

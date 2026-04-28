@@ -98,13 +98,13 @@ export function AccountantDashboard() {
     useEffect(() => {
         if (socket) {
             socket.emit('join_dashboard', 'ACCOUNTANT');
-
+            
             socket.on('FEE_PAYMENT_CREATED', () => {
                 // Re-fetch stats to update trend and summary
                 fetchStats();
             });
         }
-
+        
         return () => {
             if (socket) {
                 socket.off('FEE_PAYMENT_CREATED');

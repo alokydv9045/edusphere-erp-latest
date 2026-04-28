@@ -29,32 +29,23 @@ import { AlertCircle as LucideAlertCircle } from 'lucide-react';
 export default function RoutesPage() {
   const router = useRouter();
   const [routes, setRoutes] = useState<any[]>([]);
-  const [meta, setMeta] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchData();
-  }, [currentPage]);
+  }, []);
 
   const fetchData = async () => {
     try {
-      if (currentPage === 1) setIsLoading(true);
+      setIsLoading(true);
       const [rRes, sRes] = await Promise.all([
-        transportAPI.getRoutes({ 
-          page: currentPage, 
-          limit: 10,
-          search: searchQuery 
-        }),
+        transportAPI.getRoutes(),
         transportAPI.getStats()
       ]);
-      if (rRes.data?.success) {
-        setRoutes(rRes.data.routes);
-        setMeta(rRes.data.meta);
-      }
+      if (rRes.data?.success) setRoutes(rRes.data.routes);
       if (sRes.data?.success) setStats(sRes.data.stats);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch transport routes');
@@ -63,11 +54,11 @@ export default function RoutesPage() {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCurrentPage(1);
-    fetchData();
-  };
+  const filteredRoutes = routes.filter(r => 
+    r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (r.startLocation && r.startLocation.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (r.endLocation && r.endLocation.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   if (isLoading) {
     return (
@@ -121,25 +112,22 @@ export default function RoutesPage() {
         ))}
       </div>
 
-      <form onSubmit={handleSearch} className="relative w-full max-w-xs flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-                placeholder="Search routes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-10 rounded-lg bg-white border-slate-200 focus-visible:ring-slate-900 shadow-sm text-xs"
-            />
-          </div>
-          <Button type="submit" size="sm" className="bg-slate-900">Search</Button>
-      </form>
+      <div className="relative w-full max-w-xs">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+              placeholder="Search routes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-10 rounded-lg bg-white border-slate-200 focus-visible:ring-slate-900 shadow-sm text-xs"
+          />
+      </div>
 
       {error ? (
         <Card className="border-rose-100 bg-rose-50 rounded-3xl p-8 flex items-center gap-4 text-rose-700">
             <AlertCircle className="h-6 w-6 shrink-0" />
             <p className="font-black uppercase text-sm tracking-widest">{typeof error === "string" ? error : JSON.stringify(error)}</p>
         </Card>
-      ) : routes.length === 0 ? (
+      ) : filteredRoutes.length === 0 ? (
         <div className="text-center py-24 bg-slate-50/50 rounded-[3rem] border-2 border-dashed border-slate-200">
           <Map className="h-20 w-20 mx-auto mb-6 text-slate-200" />
           <h3 className="text-2xl font-black text-slate-900">No Routes Mapped</h3>
@@ -149,9 +137,8 @@ export default function RoutesPage() {
           </Button>
         </div>
       ) : (
-        <>
         <div className="grid gap-6 md:grid-cols-2">
-          {routes.map((route) => (
+          {filteredRoutes.map((route) => (
             <Card key={route.id} className="group overflow-hidden rounded-xl border shadow-sm transition-all hover:shadow-md relative bg-white">
               <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: route.colorCode || '#0F172A' }} />
               <CardContent className="p-6">
@@ -220,35 +207,6 @@ export default function RoutesPage() {
             </Card>
           ))}
         </div>
-        
-        {meta && meta.totalPages > 1 && (
-            <div className="flex items-center justify-between px-10 py-10 mt-10 border-t border-slate-100 bg-slate-50/50 rounded-3xl">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Network Page {currentPage} of {meta.totalPages}
-                </p>
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(prev => prev - 1)}
-                        className="rounded-xl font-bold text-xs"
-                    >
-                        Previous
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage === meta.totalPages}
-                        onClick={() => setCurrentPage(prev => prev + 1)}
-                        className="rounded-xl font-bold text-xs"
-                    >
-                        Next
-                    </Button>
-                </div>
-            </div>
-        )}
-        </>
       )}
     </div>
   );

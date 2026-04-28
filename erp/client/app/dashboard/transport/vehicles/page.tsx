@@ -29,50 +29,35 @@ import { cn } from '@/lib/utils';
 export default function VehiclesPage() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<any[]>([]);
-  const [meta, setMeta] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchData();
-  }, [currentPage]);
+  }, []);
 
   const fetchData = async () => {
     try {
-      setIsRefreshing(true);
-      if (currentPage === 1 && !isRefreshing) setIsLoading(true);
-      
+      setIsLoading(true);
       const [vRes, sRes] = await Promise.all([
-        transportAPI.getVehicles({ 
-          page: currentPage, 
-          limit: 10,
-          search: searchQuery 
-        }),
+        transportAPI.getVehicles(),
         transportAPI.getStats()
       ]);
-      
-      if (vRes.data?.success) {
-        setVehicles(vRes.data.vehicles);
-        setMeta(vRes.data.meta);
-      }
+      if (vRes.data?.success) setVehicles(vRes.data.vehicles);
       if (sRes.data?.success) setStats(sRes.data.stats);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Connection error.');
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCurrentPage(1);
-    fetchData();
-  };
+  const filteredVehicles = vehicles.filter(v => 
+    v.registrationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    v.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const getStatusBadge = (status: string) => {
     const variants: any = {
@@ -115,7 +100,7 @@ export default function VehiclesPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         {[
-            { label: 'Registered Assets', value: meta?.total || vehicles.length, icon: Bus, color: 'text-slate-900', bg: 'bg-slate-50', border: 'border-l-slate-500' },
+            { label: 'Registered Assets', value: vehicles.length, icon: Bus, color: 'text-slate-900', bg: 'bg-slate-50', border: 'border-l-slate-500' },
             { label: 'Maintenance Due', value: stats?.maintenanceCount || '0', icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-l-amber-500' },
             { label: 'Critical Alerts', value: stats?.expiringDocs || '0', icon: ShieldAlert, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-l-rose-500' },
         ].map((stat) => (
@@ -138,22 +123,17 @@ export default function VehiclesPage() {
         <CardHeader className="bg-slate-50/50 p-6 flex flex-col md:flex-row items-center justify-between gap-6 border-b border-slate-100/50">
             <div className="space-y-1">
                 <CardTitle className="text-lg font-bold text-slate-900">Inventory Management</CardTitle>
-                <CardDescription className="text-xs text-muted-foreground font-medium text-emerald-600 font-bold">
-                    {isRefreshing ? 'Refreshing assets...' : `Showing units ${((currentPage - 1) * 10) + 1} to ${Math.min(currentPage * 10, meta?.total || 0)} of ${meta?.total || 0}`}
-                </CardDescription>
+                <CardDescription className="text-xs text-muted-foreground font-medium">Real-time status of {vehicles.length} operational units.</CardDescription>
             </div>
-            <form onSubmit={handleSearch} className="relative w-full max-w-xs flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                      placeholder="Search fleet..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 h-10 rounded-lg bg-white border-slate-200 focus-visible:ring-slate-900 shadow-sm text-xs"
-                  />
-                </div>
-                <Button type="submit" size="sm" className="bg-slate-900">Search</Button>
-            </form>
+            <div className="relative w-full max-w-xs">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                    placeholder="Search fleet..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-10 rounded-lg bg-white border-slate-200 focus-visible:ring-slate-900 shadow-sm text-xs"
+                />
+            </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           {error ? (
@@ -161,7 +141,7 @@ export default function VehiclesPage() {
               <AlertCircle className="h-6 w-6" />
               <p>{typeof error === "string" ? error : JSON.stringify(error)}</p>
             </div>
-          ) : vehicles.length === 0 ? (
+          ) : filteredVehicles.length === 0 ? (
             <div className="text-center py-32 bg-slate-50/20">
               <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-xl">
                 <Bus className="h-10 w-10 text-slate-200" />
@@ -181,7 +161,7 @@ export default function VehiclesPage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vehicles.map((vehicle) => (
+                  {filteredVehicles.map((vehicle) => (
                     <TableRow key={vehicle.id} className="hover:bg-slate-50/50 transition-colors group">
                       <TableCell className="pl-10 py-6">
                         <div className="flex items-center gap-5">
@@ -244,33 +224,6 @@ export default function VehiclesPage() {
               </Table>
           )}
         </CardContent>
-        {meta && meta.totalPages > 1 && (
-            <div className="flex items-center justify-between px-10 py-6 border-t border-slate-100 bg-slate-50/30">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Page {currentPage} of {meta.totalPages}
-                </p>
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage === 1 || isRefreshing}
-                        onClick={() => setCurrentPage(prev => prev - 1)}
-                        className="rounded-xl font-bold text-xs"
-                    >
-                        Previous
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage === meta.totalPages || isRefreshing}
-                        onClick={() => setCurrentPage(prev => prev + 1)}
-                        className="rounded-xl font-bold text-xs"
-                    >
-                        Next
-                    </Button>
-                </div>
-            </div>
-        )}
       </Card>
     </div>
   );
