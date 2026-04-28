@@ -72,4 +72,8 @@ export const attendanceAPI = {
     const { data } = await apiClient.get('/attendance/analytics', { params });
     return data;
   },
+  getMyAttendance: async (params?: { startDate?: string; endDate?: string }) => {
+    const { data } = await apiClient.get('/attendance/my', { params });
+    return data;
+  },
 };

@@ -8,7 +8,7 @@ export const transportAPI = {
   updateVehicle: (id: string, data: any) => apiClient.put(`/transport/vehicles/${id}`, data),
 
   // --- Routes ---
-  getRoutes: () => apiClient.get('/transport/routes'),
+  getRoutes: (params?: any) => apiClient.get('/transport/routes', { params }),
   getRouteById: (id: string) => apiClient.get(`/transport/routes/${id}`),
   createRoute: (data: any) => apiClient.post('/transport/routes', data),
   updateRoute: (id: string, data: any) => apiClient.put(`/transport/routes/${id}`, data),

@@ -38,37 +38,38 @@ export const AiFloatingWidget: React.FC = () => {
 
       {/* Toggle Button */}
       <motion.div
-        whileHover={{ scale: 1.05 }}
+        whileHover={{ scale: 1.05, y: -5 }}
         whileTap={{ scale: 0.95 }}
       >
         <Button
           onClick={() => setIsOpen(!isOpen)}
           size="icon"
           className={cn(
-            "h-14 w-14 rounded-full shadow-2xl transition-all duration-300",
+            "h-16 w-16 rounded-3xl shadow-2xl transition-all duration-500 premium-shadow",
             isOpen 
-              ? "bg-destructive hover:bg-destructive/90 rotate-90" 
-              : "bg-primary hover:bg-primary/90 text-primary-foreground"
+              ? "bg-rose-500 hover:bg-rose-600 rotate-90" 
+              : "premium-gradient hover:shadow-primary/40 text-primary-foreground"
           )}
         >
           {isOpen ? (
-            <X size={28} />
+            <X size={32} />
           ) : (
             <div className="relative">
-              <MessageSquare size={28} />
+              <MessageSquare size={32} className="fill-current/10" />
               <motion.div
                 animate={{ 
-                  scale: [1, 1.2, 1],
-                  opacity: [0.5, 1, 0.5]
+                  scale: [1, 1.4, 1],
+                  rotate: [0, 15, -15, 0],
+                  opacity: [0.8, 1, 0.8]
                 }}
                 transition={{ 
-                  duration: 2, 
+                  duration: 3, 
                   repeat: Infinity,
                   ease: "easeInOut"
                 }}
-                className="absolute -top-1 -right-1"
+                className="absolute -top-2 -right-2"
               >
-                <Sparkles size={16} className="text-yellow-400 fill-yellow-400" />
+                <Sparkles size={20} className="text-yellow-300 fill-yellow-300 shadow-glow" />
               </motion.div>
             </div>
           )}
@@ -83,10 +84,10 @@ export const AiFloatingWidget: React.FC = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ delay: 1 }}
-            className="absolute right-20 bottom-3 bg-background border px-3 py-1.5 rounded-lg shadow-lg hidden md:block"
+            className="absolute right-24 bottom-4 glass px-4 py-2 rounded-2xl shadow-xl hidden md:block border-none ring-1 ring-primary/20"
           >
-            <p className="text-xs font-semibold whitespace-nowrap">
-              Hi {user.firstName}! How can I help today?
+            <p className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">
+              Hi {user.firstName}! <span className="text-primary">How can I help?</span>
             </p>
           </motion.div>
         )}

@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-    CalendarDays, 
-    Clock, 
-    MapPin, 
+import {
+    CalendarDays,
+    Clock,
+    MapPin,
     ChevronRight,
     AlertCircle,
     Star,
@@ -88,7 +88,7 @@ export function UpcomingEvents() {
                             const config = TYPE_CONFIG[event.type] || TYPE_CONFIG.NOTICE;
 
                             return (
-                                <div 
+                                <div
                                     key={event.id}
                                     className="group relative flex gap-3 p-2 rounded-xl transition-all hover:bg-white/5 border border-transparent hover:border-white/10"
                                 >
@@ -98,7 +98,7 @@ export function UpcomingEvents() {
                                         <span className="text-[10px] font-bold uppercase text-slate-400">{date.toLocaleDateString('en-US', { month: 'short' })}</span>
                                         <span className="text-lg font-black leading-none text-white">{date.getDate()}</span>
                                     </div>
-                                    
+
                                     <div className="flex-1 min-w-0">
                                         <h4 className="text-sm font-bold truncate text-slate-100 group-hover:text-primary transition-colors">
                                             {event.title}
@@ -118,7 +118,7 @@ export function UpcomingEvents() {
                                             )}
                                         </div>
                                     </div>
-                                    
+
                                     <div className="self-center opacity-0 group-hover:opacity-100 transition-opacity">
                                         <ChevronRight className="h-4 w-4 text-primary" />
                                     </div>

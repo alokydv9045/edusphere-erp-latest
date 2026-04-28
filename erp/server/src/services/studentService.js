@@ -8,11 +8,65 @@ class StudentService {
     /**
      * Get paginated and filtered students
      */
-    async getStudents(filters) {
+    async getStudents(filters, userContext) {
         const { classId, sectionId, status, search, page = 1, limit = 25 } = filters;
 
         const where = {};
-        if (classId) where.currentClassId = classId;
+        
+        // Role-based filtering for teachers
+        if (userContext && userContext.role === 'TEACHER') {
+            const teacher = await prisma.teacher.findUnique({
+                where: { userId: userContext.userId },
+                include: {
+                    subjects: {
+                        include: { subject: true }
+                    }
+                }
+            });
+
+            if (teacher) {
+                const assignedClassIds = new Set();
+                
+                // 1. Classes where they are the Class Teacher
+                const classTeacherClasses = await prisma.class.findMany({
+                    where: { classTeacherId: teacher.id },
+                    select: { id: true }
+                });
+                classTeacherClasses.forEach(c => assignedClassIds.add(c.id));
+
+                // 2. Classes where they teach a subject
+                teacher.subjects.forEach(st => {
+                    if (st.subject && st.subject.classId) {
+                        assignedClassIds.add(st.subject.classId);
+                    }
+                });
+
+                const assignedClassIdsArray = Array.from(assignedClassIds);
+
+                // If a specific classId is requested, ensure it's in assignments
+                if (classId) {
+                    if (assignedClassIds.has(classId)) {
+                        where.currentClassId = classId;
+                    } else {
+                        // Forbidden class requested - force empty result
+                        where.currentClassId = 'none';
+                    }
+                } else {
+                    // Default to all assigned classes
+                    if (assignedClassIdsArray.length === 0) {
+                        where.currentClassId = 'none';
+                    } else {
+                        where.currentClassId = { in: assignedClassIdsArray };
+                    }
+                }
+            } else {
+                where.currentClassId = 'none';
+            }
+        } else {
+            // Admin/Other roles can filter freely
+            if (classId) where.currentClassId = classId;
+        }
+
         if (sectionId) where.sectionId = sectionId;
         if (status) where.status = status;
 

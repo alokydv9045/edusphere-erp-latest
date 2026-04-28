@@ -13,6 +13,7 @@ const {
   submitSlotAttendance,
   submitStaffAttendance,
   getAttendanceAnalytics,
+  getMyAttendance,
 } = require('../controllers/attendanceController');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -31,6 +32,7 @@ router.post('/rfid-scan', handleRFIDScan);
 
 // Authenticated routes below
 router.use(authMiddleware);
+router.get('/my', getMyAttendance);
 
 router.post('/mark', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), validate(markAttendanceSchema), markAttendance);
 router.get('/date', getAttendanceByDate);

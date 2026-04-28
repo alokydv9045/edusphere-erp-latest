@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { transportAPI } from '@/lib/api/transport';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export default function DriverDashboard() {
   const router = useRouter();
@@ -154,7 +155,7 @@ export default function DriverDashboard() {
             Go Back
           </Button>
           <div className="flex items-center gap-4 py-4">
-            <div className="w-14 h-14 bg-slate-950 text-white rounded-2xl flex items-center justify-center shadow-lg">
+            <div className="w-14 h-14 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center shadow-sm">
                 <Bus className="h-7 w-7" />
             </div>
             <div>
@@ -201,20 +202,26 @@ export default function DriverDashboard() {
         </div>
 
         <div className="space-y-10">
-            <Card className={`border-none shadow-2xl rounded-[3rem] p-4 text-center transition-all ${
-                activeTripId ? 'bg-rose-50 ring-2 ring-rose-200' : 'bg-slate-950 text-white'
+            <Card className={`border-slate-100 shadow-2xl rounded-[3rem] p-4 text-center transition-all bg-white ring-1 ring-slate-100 ${
+                activeTripId ? 'ring-rose-200 bg-rose-50/50' : ''
             }`}>
                  <div className="p-10 space-y-8">
-                    <div className="w-24 h-24 bg-white/10 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl">
+                    <div className={cn(
+                        "w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl",
+                        activeTripId ? "bg-white text-rose-500" : "bg-slate-900 text-white"
+                    )}>
                          {activeTripId ? (
-                             <Navigation className="h-10 w-10 text-rose-500 animate-bounce" />
+                             <Navigation className="h-10 w-10 animate-bounce" />
                          ) : (
-                             <Play className="h-10 w-10 text-white" />
+                             <Play className="h-10 w-10" />
                          )}
                     </div>
                     <div>
-                        <h2 className="text-4xl font-black tracking-tighter">{activeTripId ? 'Route Active' : 'Start Journey'}</h2>
-                        <p className={`font-medium mt-2 ${activeTripId ? 'text-rose-700' : 'text-slate-400'}`}>
+                        <h2 className={cn(
+                            "text-4xl font-black tracking-tighter",
+                            activeTripId ? "text-rose-900" : "text-slate-900"
+                        )}>{activeTripId ? 'Route Active' : 'Start Journey'}</h2>
+                        <p className={`font-medium mt-2 ${activeTripId ? 'text-rose-700' : 'text-slate-500'}`}>
                             {activeTripId ? 'GPS streaming is live to all parents.' : 'Initialize route tracking system.'}
                         </p>
                     </div>
@@ -222,7 +229,7 @@ export default function DriverDashboard() {
                         <Button 
                             onClick={startTrip} 
                             disabled={!assignment?.vehicle || !assignment?.route}
-                            className="w-full h-18 bg-white text-slate-950 rounded-[2rem] font-black text-xl hover:bg-slate-100 shadow-2xl active:scale-95 transition-all py-8"
+                            className="w-full h-18 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-slate-800 shadow-2xl active:scale-95 transition-all py-8"
                         >
                             START SHIFT
                         </Button>
@@ -269,20 +276,20 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      <Card className="border-none shadow-2xl bg-slate-900 text-white rounded-[3rem] p-8 flex items-center justify-between group overflow-hidden relative">
+      <Card className="border-slate-100 shadow-2xl bg-white text-slate-900 rounded-[3rem] p-8 flex flex-col md:flex-row items-center justify-between group overflow-hidden relative ring-1 ring-slate-100">
            <div className="absolute top-0 right-0 p-12 opacity-5 scale-150 rotate-12 transition-transform duration-1000 group-hover:scale-[2]">
                 <Smartphone className="w-32 h-32" />
            </div>
-           <div className="flex items-center gap-8 relative z-10">
-                <div className="w-20 h-20 bg-white/10 rounded-[2rem] flex items-center justify-center shadow-2xl">
-                    <Phone className="h-10 w-10 text-emerald-400" />
+           <div className="flex items-center gap-8 relative z-10 w-full md:w-auto">
+                <div className="w-20 h-20 bg-emerald-50 rounded-[2rem] flex items-center justify-center shadow-inner">
+                    <Phone className="h-10 w-10 text-emerald-600" />
                 </div>
                 <div>
                     <h3 className="text-2xl font-black tracking-tight">Need Dispatch Support?</h3>
-                    <p className="text-slate-400 font-medium">Contact the central transport hub for emergencies.</p>
+                    <p className="text-slate-500 font-medium text-sm">Contact the central transport hub for emergencies.</p>
                 </div>
            </div>
-           <Button className="relative z-10 bg-white text-slate-950 hover:bg-slate-100 rounded-2xl h-14 px-10 font-black shadow-2xl shadow-slate-950/50">
+           <Button className="relative z-10 bg-slate-900 text-white hover:bg-slate-800 rounded-2xl h-14 px-10 font-black shadow-xl shadow-slate-900/10 active:scale-95 transition-all mt-6 md:mt-0">
                DIAL DISPATCH
            </Button>
       </Card>

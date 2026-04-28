@@ -261,7 +261,7 @@ export default function InventoryPage() {
                 <div className="text-center">
                   <TrendingDown className="mx-auto mb-2 h-8 w-8 text-green-600" />
                   <p className="text-sm font-medium text-muted-foreground">In Stock</p>
-                  <p className="text-2xl font-bold">{items.filter(i => i.quantity > 10).length}</p>
+                  <p className="text-2xl font-bold">{items.filter((i: any) => i.quantity > (i.minStockLevel || 10)).length}</p>
                 </div>
               </CardContent>
             </Card>
@@ -279,7 +279,7 @@ export default function InventoryPage() {
                 <div className="text-center">
                   <Package className="mx-auto mb-2 h-8 w-8 text-purple-600" />
                   <p className="text-sm font-medium text-muted-foreground">Categories</p>
-                  <p className="text-2xl font-bold">6</p>
+                  <p className="text-2xl font-bold">{new Set(items.map((i: any) => i.category).filter(Boolean)).size || 1}</p>
                 </div>
               </CardContent>
             </Card>

@@ -48,6 +48,7 @@ const calendarRoutes = require('./src/routes/calendarRoutes');
 const timetableRoutes = require('./src/routes/timetableRoutes');
 const backupRoutes = require('./src/routes/backupRoutes');
 const aiRoutes = require('./src/routes/AiRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
 const { initSocket } = require('./src/services/socketService');
 const { initScheduler } = require('./src/config/scheduler');
 const errorHandler = require('./src/middleware/errorHandler');
@@ -73,7 +74,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Initialize Socket.io
-initSocket(server, corsOptions);
+const io = initSocket(server, corsOptions);
+app.set('io', io);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -145,6 +147,7 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/timetables', timetableRoutes);
 app.use('/api/admin/backups', backupRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 handler
 app.use((req, res) => {

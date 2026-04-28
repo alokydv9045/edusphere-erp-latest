@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { MapPin, Loader2, CheckCircle2 } from "lucide-react";
+import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 
 import { UseFormReturn } from "react-hook-form";
 import { StudentRegistrationValues } from "@/lib/validators/student";
@@ -23,6 +24,7 @@ interface AddressDetailsProps {
 }
 
 export default function AddressDetails({ form, onNext, onPrev }: AddressDetailsProps) {
+    const { isLoaded } = useGoogleMaps();
     const [isGeocoding, setIsGeocoding] = useState(false);
 
     const handleGeocode = async () => {
@@ -40,6 +42,11 @@ export default function AddressDetails({ form, onNext, onPrev }: AddressDetailsP
         setIsGeocoding(true);
 
         try {
+            if (!isLoaded) {
+                alert("Google Maps not loaded yet. Please wait a moment.");
+                setIsGeocoding(false);
+                return;
+            }
             // @ts-ignore
             const geocoder = new window.google.maps.Geocoder();
             geocoder.geocode({ address: fullAddress }, (results: any, status: any) => {

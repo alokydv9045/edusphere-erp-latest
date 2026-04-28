@@ -286,27 +286,34 @@ class DashboardService {
             upcomingExamCount: upcomingExamCount || 0,
             overdueBooks: overdueBooks || 0,
             transport: await this._getTransportOverallStats(),
+            inventorySummary: await DashboardRepository.getInventorySummaryData(),
+            librarySummary: await DashboardRepository.getLibrarySummaryData(),
             role: 'ADMIN'
         };
     }
 
     async _getTransportOverallStats() {
         try {
-            const [totalVehicles, activeTrips, totalAllocations] = await Promise.all([
+            const [totalVehicles, activeTrips, totalAllocations, pending, activeRoutes, totalRoutes] = await Promise.all([
                 DashboardRepository.countVehicles(),
                 DashboardRepository.countActiveTrips(),
-                this.countTransportAllocations()
+                DashboardRepository.countTransportAllocations(),
+                DashboardRepository.countStudentsWithoutTransport(),
+                DashboardRepository.countActiveRoutes(),
+                DashboardRepository.countTotalRoutes()
             ]);
 
             return {
                 totalVehicles,
                 activeTrips,
                 totalAllocations,
+                pending,
+                coverage: totalRoutes > 0 ? Math.round((activeRoutes / totalRoutes) * 100) : 0,
                 onRoad: activeTrips > 0
             };
         } catch (err) {
             logger.error('Error fetching transport stats:', err);
-            return { totalVehicles: 0, activeTrips: 0, totalAllocations: 0, onRoad: false };
+            return { totalVehicles: 0, activeTrips: 0, totalAllocations: 0, pending: 0, coverage: 0, onRoad: false };
         }
     }
 

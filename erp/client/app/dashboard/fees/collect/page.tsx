@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Loader2, Search, ArrowRight, Banknote, UserRoundCheck } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { cn } from '@/lib/utils';
 interface FeeStudent {
   id: string;
   admissionNumber: string;
@@ -20,6 +21,9 @@ interface FeeStudent {
   totalPending: number;
 }
 
+import { PremiumSection } from '@/components/dashboard/PremiumSection';
+import { motion, AnimatePresence } from 'framer-motion';
+
 export default function FeeCollectSearchPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,14 +32,10 @@ export default function FeeCollectSearchPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const { canCollectFees } = usePermissions();
 
-  // Redirect if unauthorized
   useEffect(() => {
-    if (canCollectFees === false) {
-      router.push('/dashboard/fees');
-    }
+    if (canCollectFees === false) { router.push('/dashboard/fees'); }
   }, [canCollectFees, router]);
 
-  // Debounced Search Effect
   useEffect(() => {
     const timer = setTimeout(async () => {
       const query = searchQuery;
@@ -62,137 +62,153 @@ export default function FeeCollectSearchPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Trigger search on input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, string> = {
-      PAID: 'bg-green-100 text-green-700 hover:bg-green-100',
-      PENDING: 'bg-orange-100 text-orange-700 hover:bg-orange-100',
-      PARTIAL: 'bg-blue-100 text-blue-700 hover:bg-blue-100',
-      OVERDUE: 'bg-red-100 text-red-700 hover:bg-red-100',
+      PAID: 'bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20',
+      PENDING: 'bg-amber-500/10 text-amber-500 ring-1 ring-amber-500/20',
+      PARTIAL: 'bg-blue-500/10 text-blue-500 ring-1 ring-blue-500/20',
+      OVERDUE: 'bg-rose-500/10 text-rose-500 ring-1 ring-rose-500/20',
     };
-    return variants[status] || 'bg-gray-100 text-gray-700 hover:bg-gray-100';
+    return variants[status] || 'bg-slate-500/10 text-slate-500 ring-1 ring-slate-500/20';
   };
 
-  if (canCollectFees === false) {
-    return null; // Will redirect in useEffect
-  }
+  if (canCollectFees === false) { return null; }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Fee Counter</h1>
-          <p className="text-muted-foreground">Select a student to view ledgers and collect payments</p>
+    <div className="space-y-10 pb-20 max-w-5xl mx-auto">
+      {/* Action Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+        <div className="space-y-2">
+            <motion.div 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center gap-2"
+            >
+                <div className="h-2 w-8 bg-primary rounded-full" />
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-primary">Financial Intake</span>
+            </motion.div>
+            <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic">
+              Fee <span className="text-primary">Counter</span>
+            </h1>
         </div>
-        <Button variant="outline" asChild>
+        <Button variant="ghost" asChild className="rounded-xl glass border-none ring-1 ring-primary/10 font-black text-[10px] uppercase tracking-widest hover:bg-primary/5">
           <Link href="/dashboard/fees">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Fees Dashboard
+            <ArrowLeft className="mr-2 h-4 w-4 text-primary" /> Return to Dashboard
           </Link>
         </Button>
       </div>
 
-      <Card className="border-2 shadow-sm">
-        <CardHeader className="bg-slate-50/50 border-b pb-6">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Search className="h-5 w-5 text-primary" />
-            Smart Search
-          </CardTitle>
-          <CardDescription>
-            Enter admission number, roll number, or student name
-          </CardDescription>
-
-          <div className="relative mt-4">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-slate-400" />
-            </div>
-            <Input
-              type="text"
-              placeholder="e.g. ADM23001 or John Doe..."
-              value={searchQuery}
-              onChange={handleInputChange}
-              className="pl-10 h-14 text-lg bg-white shadow-inner focus-visible:ring-primary/50"
-              autoFocus
-            />
-            {isSearching && (
-              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                <Loader2 className="h-5 w-5 text-primary animate-spin" />
-              </div>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          {!hasSearched && !isSearching && (
-            <div className="py-16 text-center text-slate-500 flex flex-col items-center">
-              <div className="bg-slate-100 p-4 rounded-full mb-4">
-                <UserRoundCheck className="h-8 w-8 text-slate-400" />
-              </div>
-              <p className="text-lg font-medium">Ready to collect</p>
-              <p className="text-sm">Start typing above to find a student instantly</p>
-            </div>
-          )}
-
-          {hasSearched && !isSearching && results.length === 0 && (
-            <div className="py-16 text-center text-slate-500">
-              <p className="text-lg font-medium text-slate-700">No students found</p>
-              <p className="text-sm">Double check the spelling or admission number</p>
-            </div>
-          )}
-
-          {results.length > 0 && (
-            <div className="divide-y">
-              {results.map((student) => (
-                <div
-                  key={student.id}
-                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 hover:bg-slate-50 transition-colors"
-                >
-                  <div className="flex gap-4">
-                    <div className="bg-primary/10 text-primary p-3 rounded-lg hidden sm:flex items-center justify-center h-12 w-12 shrink-0">
-                      <Banknote className="h-6 w-6" />
+      <PremiumSection title="Ledger Search" icon={<Search className="h-5 w-5" />}>
+        <div className="glass premium-shadow p-8 md:p-12 rounded-[3rem] space-y-10 border-none ring-1 ring-primary/5">
+            <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target Identification</p>
+                <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none transition-colors group-focus-within:text-primary">
+                      <Search className="h-6 w-6 text-slate-400" />
                     </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900 group-hover:text-primary transition-colors">
-                        {student.name}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
-                        <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-700">
-                          {student.admissionNumber}
-                        </span>
-                        <span>•</span>
-                        <span>Class: {student.className} {student.sectionName !== 'N/A' && `(${student.sectionName})`}</span>
-                      </div>
-                    </div>
+                    <Input
+                      type="text"
+                      placeholder="Admission Ref, Name, or Identity..."
+                      value={searchQuery}
+                      onChange={handleInputChange}
+                      className="pl-16 h-20 text-xl rounded-[2rem] glass border-none ring-1 ring-primary/10 focus:ring-primary/40 font-black placeholder:text-slate-400 placeholder:font-medium transition-all shadow-inner"
+                      autoFocus
+                    />
+                    <AnimatePresence>
+                        {isSearching && (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            className="absolute inset-y-0 right-0 pr-6 flex items-center pointer-events-none"
+                          >
+                            <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                          </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            </div>
+
+            <div className="bg-primary/5 rounded-[2rem] overflow-hidden min-h-[300px]">
+              {!hasSearched && !isSearching && (
+                <div className="py-24 text-center space-y-6">
+                  <div className="bg-white dark:bg-slate-800 h-20 w-20 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl ring-1 ring-primary/5">
+                    <UserRoundCheck className="h-10 w-10 text-primary/40" />
                   </div>
-
-                  <div className="mt-4 sm:mt-0 flex w-full sm:w-auto items-center justify-between sm:justify-end gap-6 border-t sm:border-0 pt-4 sm:pt-0">
-                    <div className="flex flex-col items-start sm:items-end">
-                      <Badge className={getStatusBadge(student.feeStatus)} variant="outline">
-                        {student.feeStatus}
-                      </Badge>
-                      {student.totalPending > 0 && (
-                        <span className="text-sm font-semibold text-red-600 mt-1">
-                          Pending: ₹{student.totalPending.toLocaleString()}
-                        </span>
-                      )}
-                    </div>
-
-                    <Button asChild className="shrink-0 gap-2">
-                      <Link href={`/dashboard/fees/collect/${student.id}`}>
-                        Select <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                  <div>
+                      <p className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Ready for Processing</p>
+                      <p className="text-sm text-slate-500 mt-2">Initialize search protocol to fetch institutional ledger data.</p>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {hasSearched && !isSearching && results.length === 0 && (
+                <div className="py-24 text-center space-y-4">
+                  <p className="text-rose-500 font-black uppercase tracking-widest text-xl">Uplink Void</p>
+                  <p className="text-slate-500 text-sm italic">No identities found matching the search vector.</p>
+                </div>
+              )}
+
+              {results.length > 0 && (
+                <div className="divide-y divide-primary/5">
+                  <AnimatePresence mode="popLayout">
+                    {results.map((student, idx) => (
+                      <motion.div
+                        key={student.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className="group flex flex-col sm:flex-row items-start sm:items-center justify-between p-8 hover:bg-white/10 transition-all cursor-pointer"
+                        onClick={() => router.push(`/dashboard/fees/collect/${student.id}`)}
+                      >
+                        <div className="flex gap-6">
+                          <div className="bg-primary/10 text-primary h-14 w-14 rounded-2xl hidden sm:flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all ring-1 ring-primary/10">
+                            <Banknote className="h-7 w-7" />
+                          </div>
+                          <div className="space-y-1">
+                            <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-primary transition-colors">
+                              {student.name}
+                            </h3>
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono bg-white/40 px-2 py-0.5 rounded-lg text-[10px] font-bold text-primary ring-1 ring-primary/10">
+                                {student.admissionNumber}
+                              </span>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                Tier: {student.className} {student.sectionName !== 'N/A' && `// ${student.sectionName}`}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 sm:mt-0 flex w-full sm:w-auto items-center justify-between sm:justify-end gap-10">
+                          <div className="flex flex-col items-start sm:items-end gap-2">
+                            <Badge className={cn("text-[9px] font-black uppercase px-4 py-1.5 border-none shadow-sm", getStatusBadge(student.feeStatus))}>
+                              {student.feeStatus}
+                            </Badge>
+                            {student.totalPending > 0 && (
+                              <span className="text-xs font-black text-rose-500 uppercase tracking-widest">
+                                DEBT: ₹{student.totalPending.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+
+                          <Button size="icon" className="h-12 w-12 rounded-2xl bg-white text-primary ring-1 ring-primary/10 hover:bg-primary hover:text-white transition-all shadow-lg group-hover:scale-110">
+                            <ArrowRight className="h-5 w-5" />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </PremiumSection>
     </div>
   );
 }
+

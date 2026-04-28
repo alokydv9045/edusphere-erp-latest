@@ -10,7 +10,7 @@ const { generateAttendanceReportPDF } = require('../utils/attendanceReportGenera
  * Route: GET /api/students
  */
 const getStudents = asyncHandler(async (req, res) => {
-  const result = await studentService.getStudents(req.query);
+  const result = await studentService.getStudents(req.query, req.user);
 
   res.status(200).json({
     success: true,

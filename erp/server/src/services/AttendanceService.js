@@ -588,6 +588,48 @@ class AttendanceService {
             studentMatrix
         };
     }
+    async getMyAttendance(userId, query) {
+        const { startDate, endDate } = query;
+        
+        // 1. Identify entity
+        const user = await AttendanceRepository.findUserById(userId);
+        if (!user) throw new AppError('User not found', 404);
+
+        const entityId = user.teacher?.id || user.staff?.id;
+        const attendeeType = user.teacher ? ROLES.TEACHER : ROLES.STAFF;
+
+        if (!entityId) throw new AppError('No teacher or staff profile linked to this account', 400);
+
+        // 2. Build where clause
+        const where = {
+            attendeeType,
+            ...(user.teacher ? { teacherId: entityId } : { staffId: entityId })
+        };
+
+        if (startDate || endDate) {
+            where.date = {};
+            if (startDate) where.date.gte = new Date(startDate);
+            if (endDate) where.date.lte = new Date(endDate);
+        }
+
+        // 3. Fetch records
+        const records = await AttendanceRepository.findAttendanceRecords(where, {
+            orderBy: { date: 'desc' },
+            include: {
+                scanner: { select: { name: true } }
+            }
+        });
+
+        // 4. Calculate Stats
+        const stats = {
+            total: records.length,
+            present: records.filter(r => r.status === ATTENDANCE_STATUS.PRESENT).length,
+            absent: records.filter(r => r.status === ATTENDANCE_STATUS.ABSENT).length,
+            late: records.filter(r => r.status === ATTENDANCE_STATUS.LATE).length,
+        };
+
+        return { records, stats };
+    }
 }
 
 module.exports = new AttendanceService();

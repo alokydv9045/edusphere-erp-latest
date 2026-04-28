@@ -177,6 +177,15 @@ const getAttendanceAnalytics = asyncHandler(async (req, res) => {
   });
 });
 
+// Get logged-in user's attendance records
+const getMyAttendance = asyncHandler(async (req, res) => {
+  const result = await AttendanceService.getMyAttendance(req.user.userId, req.query);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
+});
+
 module.exports = {
   markAttendance,
   getAttendanceByDate,
@@ -191,4 +200,5 @@ module.exports = {
   submitSlotAttendance,
   submitStaffAttendance,
   getAttendanceAnalytics,
+  getMyAttendance,
 };

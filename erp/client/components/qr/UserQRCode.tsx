@@ -9,11 +9,20 @@ interface UserQRCodeProps {
     userName?: string;
     userRole?: string;
     isAdmin?: boolean;
+    size?: number;
+    className?: string;
 }
 
 import apiClient from '@/lib/api/client';
 
-export default function UserQRCode({ userId, userName, userRole, isAdmin = false }: UserQRCodeProps) {
+export default function UserQRCode({ 
+    userId, 
+    userName, 
+    userRole, 
+    isAdmin = false,
+    size = 220,
+    className
+}: UserQRCodeProps) {
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [regenerating, setRegenerating] = useState(false);
@@ -55,7 +64,7 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
     };
 
     return (
-        <div className="qr-card">
+        <div className={`qr-card ${className || ''}`}>
             <div className="qr-card-header">
                 <QrCode size={18} />
                 <span>Attendance QR Code</span>
@@ -76,8 +85,8 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
                     <Image
                         src={qrCode}
                         alt={`QR Code for ${userName}`}
-                        width={220}
-                        height={220}
+                        width={size}
+                        height={size}
                         className="qr-image"
                         unoptimized
                     />
@@ -115,8 +124,8 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
 
             <style jsx>{`
         .qr-card {
-          background: linear-gradient(135deg, #1e1e3f 0%, #16213e 100%);
-          border: 1px solid rgba(99, 102, 241, 0.3);
+          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+          border: 1px solid rgba(15, 82, 186, 0.1);
           border-radius: 16px;
           padding: 20px;
           display: flex;
@@ -129,7 +138,7 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
           display: flex;
           align-items: center;
           gap: 8px;
-          color: #a5b4fc;
+          color: #1e293b;
           font-size: 13px;
           font-weight: 600;
           letter-spacing: 0.5px;
@@ -162,10 +171,10 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
           align-items: center;
           gap: 4px;
         }
-        .qr-name { color: #e2e8f0; font-weight: 600; font-size: 14px; }
+        .qr-name { color: #0f172a; font-weight: 700; font-size: 14px; }
         .qr-role-badge {
-          background: rgba(99,102,241,0.2);
-          color: #a5b4fc;
+          background: rgba(15, 82, 186, 0.1);
+          color: #0f52ba;
           border-radius: 20px;
           padding: 2px 10px;
           font-size: 11px;
@@ -203,8 +212,8 @@ export default function UserQRCode({ userId, userName, userRole, isAdmin = false
           justify-content: center;
           gap: 6px;
           background: transparent;
-          color: #a5b4fc;
-          border: 1px solid rgba(99,102,241,0.4);
+          color: #0f52ba;
+          border: 1px solid rgba(15, 82, 186, 0.3);
           border-radius: 8px;
           padding: 8px 14px;
           font-size: 13px;

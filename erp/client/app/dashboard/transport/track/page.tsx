@@ -22,9 +22,11 @@ import { Button } from '@/components/ui/button';
 import { transportAPI } from '@/lib/api/transport';
 import { socketService } from '@/lib/socket';
 import { toast } from 'sonner';
+import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 
 export default function TrackBusPage() {
   const router = useRouter();
+  const { isLoaded } = useGoogleMaps();
   const [activeTrips, setActiveTrips] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [tripsLocation, setTripsLocation] = useState<Record<string, {lat: number, lng: number}>>({});
@@ -116,7 +118,7 @@ export default function TrackBusPage() {
     const initMap = async () => {
         // @ts-ignore
         const google = window.google;
-        if (!google || !mapRef.current) return;
+        if (!isLoaded || !google || !mapRef.current) return;
 
         try {
             // Load required libraries
@@ -141,8 +143,8 @@ export default function TrackBusPage() {
                 if (!markersRef.current[trip.id]) {
                     const pinElement = new PinElement({
                         glyph: '🚌',
-                        background: '#0F172A',
-                        borderColor: '#1E293B',
+                        background: '#3B82F6',
+                        borderColor: '#2563EB',
                     });
                     
                     markersRef.current[trip.id] = new AdvancedMarkerElement({
@@ -160,7 +162,7 @@ export default function TrackBusPage() {
         }
     };
 
-    if (!isLoading) {
+    if (!isLoading && isLoaded) {
         initMap();
     }
 
@@ -189,9 +191,9 @@ export default function TrackBusPage() {
       return (
         <div className="relative w-full h-[calc(100vh-4rem)] overflow-hidden animate-in fade-in duration-700">
             <div ref={mapRef} className="absolute inset-0 z-0 bg-slate-50" />
-            <div className="absolute inset-0 flex items-center justify-center z-10 bg-slate-900/10 backdrop-blur-sm">
-                <Card className="bg-white/60 backdrop-blur-3xl border border-white/50 shadow-[0_64px_64px_-24px_rgba(0,0,0,0.2)] p-16 rounded-[4rem] flex flex-col items-center text-center gap-10 max-w-xl mx-4 ring-1 ring-white/20">
-                    <div className="w-24 h-24 bg-slate-950 text-white rounded-[2.5rem] flex items-center justify-center shadow-2xl animate-bounce">
+            <div className="absolute inset-0 flex items-center justify-center z-10 bg-white/50 backdrop-blur-sm">
+                <Card className="bg-white/80 backdrop-blur-3xl border border-white/50 shadow-2xl p-16 rounded-[4rem] flex flex-col items-center text-center gap-10 max-w-xl mx-4 ring-1 ring-white/20">
+                    <div className="w-24 h-24 bg-slate-100 text-slate-900 rounded-[2.5rem] flex items-center justify-center shadow-inner animate-bounce">
                         <Bus className="h-10 w-10" />
                     </div>
                     <div className="space-y-4">
@@ -223,10 +225,10 @@ export default function TrackBusPage() {
             <ArrowLeft className="mr-3 h-5 w-5" />
             Terminal Exit
           </Button>
-          <Card className="bg-white/40 backdrop-blur-3xl border border-white/50 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] p-8 rounded-[3.5rem] ring-1 ring-white/20 min-w-[320px]">
+          <Card className="bg-white shadow-2xl p-8 rounded-[3.5rem] ring-1 ring-slate-100 min-w-[320px]">
              <div className="flex items-center gap-4 mb-2">
-                <div className="w-10 h-10 bg-slate-950 rounded-2xl flex items-center justify-center text-white shadow-2xl">
-                    <Globe className="h-5 w-5 animate-pulse" />
+                <div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-900 shadow-sm">
+                    <Globe className="h-5 w-5" />
                 </div>
                 <h1 className="text-3xl font-black tracking-tighter text-slate-900">
                     Live Matrix
@@ -239,8 +241,8 @@ export default function TrackBusPage() {
         </div>
 
         <div className="flex items-center gap-3 pointer-events-auto">
-            <Badge className="bg-slate-950/90 backdrop-blur-3xl text-white hover:bg-slate-950 h-16 px-12 rounded-[2.5rem] font-black flex items-center gap-5 shadow-2xl shadow-slate-950/20 text-sm border border-white/10 translate-y-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.8)] animate-pulse" />
+            <Badge className="bg-white/90 backdrop-blur-3xl text-slate-900 hover:bg-white h-16 px-12 rounded-[2.5rem] font-black flex items-center gap-5 shadow-2xl shadow-slate-900/10 text-sm border border-slate-100 translate-y-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse" />
                 FLEET OVERLOOK ACTIVE
             </Badge>
             <div className="bg-white/40 backdrop-blur-3xl border border-white/50 h-16 px-6 rounded-[2.5rem] flex items-center gap-4 shadow-xl translate-y-2">
@@ -260,7 +262,7 @@ export default function TrackBusPage() {
               <div className="relative z-10 flex flex-col h-full">
                   <div className="flex items-center justify-between mb-10">
                     <h3 className="text-2xl font-black text-slate-900 tracking-tighter">Global Hub</h3>
-                    <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-2xl rotate-3 group-hover:rotate-6 transition-transform">
+                    <div className="w-12 h-12 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center shadow-inner rotate-3 group-hover:rotate-6 transition-transform">
                         <Bus className="h-6 w-6" />
                     </div>
                   </div>
@@ -269,7 +271,7 @@ export default function TrackBusPage() {
                       {activeTrips.map((trip) => (
                         <div key={trip.id} className="bg-white/60 backdrop-blur-xl p-8 rounded-[3rem] border border-white/60 shadow-xl relative group transition-all hover:bg-white/80 hover:translate-x-2">
                             <div className="flex items-center gap-6 mb-6">
-                                <div className="w-16 h-16 rounded-[1.5rem] overflow-hidden bg-slate-950 text-white flex items-center justify-center shadow-2xl group-hover:scale-105 transition-transform">
+                                <div className="w-16 h-16 rounded-[1.5rem] overflow-hidden bg-slate-100 text-slate-900 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform">
                                     <Bus className="h-8 w-8" />
                                 </div>
                                 <div>
@@ -277,9 +279,9 @@ export default function TrackBusPage() {
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-2">REG: {trip.regNo}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-slate-900/5">
+                            <div className="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-slate-100">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shadow-lg">
+                                  <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-900 flex items-center justify-center font-black text-xs shadow-sm">
                                       {trip.driverName?.split(' ').map((n: string) => n[0]).join('')}
                                   </div>
                                   <div className="space-y-0.5">
@@ -297,17 +299,17 @@ export default function TrackBusPage() {
                       ))}
                   </div>
 
-                  <div className="mt-10 p-8 bg-slate-950 text-white rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] relative overflow-hidden group">
+                  <div className="mt-10 p-8 bg-emerald-50/50 backdrop-blur-xl text-emerald-900 rounded-[3rem] border border-emerald-100 group relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:rotate-12 transition-transform duration-700">
                           <ShieldCheck className="w-24 h-24" />
                       </div>
                       <div className="relative z-10 flex items-start gap-5">
-                          <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center shrink-0 border border-white/20">
-                              <Info className="h-6 w-6 text-emerald-400" />
+                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
+                              <Info className="h-6 w-6 text-emerald-600" />
                           </div>
                           <div>
-                              <h4 className="font-black text-[10px] uppercase tracking-[0.2em] mb-2 text-emerald-400">Telematic Shield</h4>
-                              <p className="text-[11px] leading-relaxed text-slate-400 font-bold">
+                              <h4 className="font-black text-[10px] uppercase tracking-[0.2em] mb-2 text-emerald-600">Telematic Shield</h4>
+                              <p className="text-[11px] leading-relaxed text-emerald-800/80 font-bold">
                                 Tracking is fully end-to-end encrypted. Status synced every 200ms.
                               </p>
                           </div>
@@ -340,14 +342,14 @@ export default function TrackBusPage() {
               </div>
           </Card>
 
-          <Card className="bg-rose-950/90 backdrop-blur-3xl text-white shadow-2xl p-6 rounded-[2.5rem] border border-rose-500/20 max-w-sm pointer-events-auto relative overflow-hidden group hidden sm:block">
+          <Card className="bg-white/80 backdrop-blur-3xl text-slate-900 shadow-2xl p-6 rounded-[2.5rem] border border-slate-100 max-w-sm pointer-events-auto relative overflow-hidden group hidden sm:block ring-1 ring-slate-100">
               <div className="flex items-center gap-5 relative z-10">
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
-                    <AlertCircle className="h-6 w-6 text-rose-400" />
+                  <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+                    <AlertCircle className="h-6 w-6 text-rose-500" />
                   </div>
                   <div>
-                      <h4 className="font-black text-rose-400 uppercase text-[9px] tracking-[0.2em] mb-1.5">Emergency Command</h4>
-                      <p className="text-[11px] text-rose-100/80 leading-snug font-bold">
+                      <h4 className="font-black text-rose-600 uppercase text-[9px] tracking-[0.2em] mb-1.5">Emergency Command</h4>
+                      <p className="text-[11px] text-slate-500 leading-snug font-bold">
                           Protocol 8-Delta active. Satellite lag monitored.
                       </p>
                   </div>

@@ -95,7 +95,13 @@ class PayrollService {
                 const lStart = new Date(Math.max(new Date(leave.startDate).getTime(), startDate.getTime()));
                 const lEnd = new Date(Math.min(new Date(leave.endDate).getTime(), endDate.getTime()));
                 const diff = Math.round((lEnd - lStart) / (1000 * 60 * 60 * 24)) + 1;
-                if (!leave.subject.includes('UNPAID')) {
+                
+                // Check metadata for standardized leave codes or subject for UNPAID keyword
+                const leaveType = leave.metadata?.leaveType || '';
+                const isPaidType = ['CL', 'SL', 'EL', 'ML'].includes(leaveType);
+                const isExplicitlyUnpaid = leave.subject.toUpperCase().includes('UNPAID');
+
+                if (isPaidType || !isExplicitlyUnpaid) {
                     paidLeaveDays += diff;
                 }
             });

@@ -5,24 +5,39 @@ const logger = require('../config/logger');
 
 // Get all teachers
 const getTeachers = asyncHandler(async (req, res) => {
-  const { status, search, page = 1, limit = 25 } = req.query;
+  const { status, search, classId, page = 1, limit = 25 } = req.query;
 
-  const where = {};
-  if (status) where.status = status;
+  const where = { AND: [] };
+  
+  if (status) where.AND.push({ status });
 
   if (search) {
-    where.OR = [
-      { user: { firstName: { contains: search, mode: 'insensitive' } } },
-      { user: { lastName: { contains: search, mode: 'insensitive' } } },
-      { employeeId: { contains: search, mode: 'insensitive' } },
-    ];
+    where.AND.push({
+      OR: [
+        { user: { firstName: { contains: search, mode: 'insensitive' } } },
+        { user: { lastName: { contains: search, mode: 'insensitive' } } },
+        { employeeId: { contains: search, mode: 'insensitive' } },
+      ],
+    });
   }
+
+  if (classId) {
+    where.AND.push({
+      OR: [
+        { assignedClass: { id: classId } },
+        { subjects: { some: { subject: { classId } } } },
+      ],
+    });
+  }
+
+  // If AND is empty, use empty object
+  const finalWhere = where.AND.length > 0 ? where : {};
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const [teachers, total] = await Promise.all([
     prisma.teacher.findMany({
-      where,
+      where: finalWhere,
       include: {
         user: {
           select: {
@@ -45,7 +60,7 @@ const getTeachers = asyncHandler(async (req, res) => {
       take: parseInt(limit),
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.teacher.count({ where }),
+    prisma.teacher.count({ where: finalWhere }),
   ]);
 
   res.json({

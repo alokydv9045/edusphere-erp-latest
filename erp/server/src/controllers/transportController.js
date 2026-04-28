@@ -4,8 +4,8 @@ const { emitEvent } = require('../services/socketService');
 
 // --- Vehicle Management ---
 const getVehicles = asyncHandler(async (req, res) => {
-    const vehicles = await TransportService.getVehicles(req.query);
-    res.status(200).json({ success: true, vehicles });
+    const { vehicles, meta } = await TransportService.getVehicles(req.query);
+    res.status(200).json({ success: true, vehicles, meta });
 });
 
 const getVehicleById = asyncHandler(async (req, res) => {
@@ -20,13 +20,14 @@ const createVehicle = asyncHandler(async (req, res) => {
 
 const updateVehicle = asyncHandler(async (req, res) => {
     const vehicle = await TransportService.updateVehicle(req.params.id, req.body);
+    emitEvent('TRANSPORT_UPDATE', { type: 'VEHICLE', id: req.params.id }, 'ADMIN');
     res.status(200).json({ success: true, message: 'Vehicle updated successfully', vehicle });
 });
 
 // --- Route Management ---
 const getRoutes = asyncHandler(async (req, res) => {
-    const routes = await TransportService.getRoutes();
-    res.status(200).json({ success: true, routes });
+    const { routes, meta } = await TransportService.getRoutes(req.query);
+    res.status(200).json({ success: true, routes, meta });
 });
 
 const getRouteById = asyncHandler(async (req, res) => {
@@ -53,12 +54,13 @@ const suggestNearestStops = asyncHandler(async (req, res) => {
 
 const allocateStudent = asyncHandler(async (req, res) => {
     const allocation = await TransportService.allocateStudent(req.body);
+    emitEvent('TRANSPORT_UPDATE', { type: 'ALLOCATION', studentId: req.body.studentId }, 'ADMIN');
     res.status(201).json({ success: true, message: 'Student allocated to transport successfully', allocation });
 });
 
 const getAllocations = asyncHandler(async (req, res) => {
-    const allocations = await TransportService.getAllocations(req.query);
-    res.status(200).json({ success: true, allocations });
+    const { allocations, meta } = await TransportService.getAllocations(req.query);
+    res.status(200).json({ success: true, allocations, meta });
 });
 
 const getGlobalLogs = asyncHandler(async (req, res) => {
@@ -144,11 +146,13 @@ const getDashboardStats = asyncHandler(async (req, res) => {
 
 const logMaintenance = asyncHandler(async (req, res) => {
     const log = await TransportService.logMaintenance(req.params.id, req.body);
+    emitEvent('TRANSPORT_UPDATE', { type: 'MAINTENANCE', vehicleId: req.params.id }, 'ADMIN');
     res.status(201).json({ success: true, message: 'Maintenance record logged successfully', log });
 });
 
 const logFuel = asyncHandler(async (req, res) => {
     const log = await TransportService.logFuel(req.params.id, req.body);
+    emitEvent('TRANSPORT_UPDATE', { type: 'FUEL', vehicleId: req.params.id }, 'ADMIN');
     res.status(201).json({ success: true, message: 'Fuel record logged successfully', log });
 });
 

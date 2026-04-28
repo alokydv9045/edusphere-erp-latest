@@ -513,6 +513,61 @@ class DashboardRepository {
             orderBy: { date: 'asc' }
         });
     }
+    // --- Dashboard Sync Methods ---
+    async countStudentsWithoutTransport() {
+        return prisma.student.count({
+            where: {
+                status: 'ACTIVE',
+                transportAllocations: {
+                    none: { status: 'ACTIVE' }
+                }
+            }
+        });
+    }
+
+    async countActiveRoutes() {
+        return prisma.transportRoute.count({
+            where: {
+                isActive: true,
+                vehicles: { some: {} }
+            }
+        });
+    }
+
+    async countTotalRoutes() {
+        return prisma.transportRoute.count();
+    }
+
+    async getInventorySummaryData() {
+        const [totalItems, outOfStock, lowStock] = await Promise.all([
+            prisma.inventoryItem.count(),
+            prisma.inventoryItem.count({ where: { quantity: 0 } }),
+            prisma.inventoryItem.findMany()
+        ]);
+        
+        const lowStockCount = lowStock.filter(item => item.quantity > 0 && item.quantity <= item.minStockLevel).length;
+        
+        return {
+            totalItems,
+            outOfStock,
+            lowStock: lowStockCount
+        };
+    }
+
+    async getLibrarySummaryData() {
+        const [totalBooks, issuedBooks, overdueBooks] = await Promise.all([
+            prisma.book.count(),
+            prisma.libraryIssue.count({ where: { status: 'ISSUED' } }),
+            prisma.libraryIssue.count({ where: { status: 'OVERDUE' } })
+        ]);
+
+        return {
+            totalBooks,
+            availableBooks: totalBooks - (issuedBooks + overdueBooks),
+            issuedBooks,
+            overdueBooks
+        };
+    }
 }
 
 module.exports = new DashboardRepository();

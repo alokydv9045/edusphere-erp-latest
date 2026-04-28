@@ -19,6 +19,12 @@ const initSocket = (server, corsOptions) => {
       logger.info(`Socket ${socket.id} joined dashboard_${role}`);
     });
 
+    // Join room based on user ID for targeted notifications
+    socket.on('join_user', (userId) => {
+      socket.join(`user_${userId}`);
+      logger.info(`Socket ${socket.id} joined user_${userId}`);
+    });
+
     // Join specific entity room (e.g., student ID or class ID)
     socket.on('join_room', (roomName) => {
       socket.join(roomName);
@@ -61,14 +67,25 @@ const emitEvent = (event, data, target = null) => {
   if (!io) return;
   
   if (target) {
-    if (target.startsWith('dashboard_') || target.startsWith('class_') || target.startsWith('student_')) {
-      io.to(target).emit(event, data);
-    } else {
-      io.to(`dashboard_${target}`).emit(event, data);
+    let room = target;
+    
+    // Check if target is already a prefixed room
+    const isPrefixed = target.startsWith('dashboard_') || 
+                      target.startsWith('class_') || 
+                      target.startsWith('student_') || 
+                      target.startsWith('user_') || 
+                      target.startsWith('trip_');
+    
+    if (!isPrefixed) {
+      room = `dashboard_${target}`;
     }
 
-    // Also emit to SUPER_ADMIN and ADMIN by default for most events
-    if (target !== 'SUPER_ADMIN' && target !== 'ADMIN') {
+    io.to(room).emit(event, data);
+    logger.debug(`Socket emit: [${event}] to [${room}]`);
+
+    // Also emit to SUPER_ADMIN and ADMIN by default for broad dashboard/role events
+    // We avoid doing this for private user_ or trip_ rooms unless explicitly targeted
+    if (room.startsWith('dashboard_') && !room.includes('SUPER_ADMIN') && !room.includes('ADMIN')) {
         io.to('dashboard_SUPER_ADMIN').emit(event, data);
         io.to('dashboard_ADMIN').emit(event, data);
     }

@@ -87,6 +87,43 @@ const getClasses = asyncHandler(async (req, res) => {
   const where = {};
   if (academicYearId) where.academicYearId = academicYearId;
 
+  // Role-based filtering for teachers
+  if (req.user && req.user.role === 'TEACHER') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: req.user.userId },
+      include: {
+        subjects: {
+          include: { subject: true }
+        }
+      }
+    });
+
+    if (teacher) {
+      const assignedClassIds = new Set();
+      
+      // 1. Classes where they are the Class Teacher
+      const classTeacherClasses = await prisma.class.findMany({
+        where: { classTeacherId: teacher.id },
+        select: { id: true }
+      });
+      classTeacherClasses.forEach(c => assignedClassIds.add(c.id));
+
+      // 2. Classes where they teach a subject
+      teacher.subjects.forEach(st => {
+        if (st.subject && st.subject.classId) {
+          assignedClassIds.add(st.subject.classId);
+        }
+      });
+
+      // If no assignments found, ensure they see nothing instead of everything
+      if (assignedClassIds.size === 0) {
+        where.id = 'none'; // Will result in empty array
+      } else {
+        where.id = { in: Array.from(assignedClassIds) };
+      }
+    }
+  }
+
   const classes = await prisma.class.findMany({
     where,
     include: {

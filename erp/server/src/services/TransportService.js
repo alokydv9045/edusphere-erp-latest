@@ -14,13 +14,28 @@ class TransportService {
         const where = {};
         if (filters.status) where.status = filters.status;
         if (filters.fuelType) where.fuelType = filters.fuelType;
+        if (filters.search) {
+            where.OR = [
+                { name: { contains: filters.search, mode: 'insensitive' } },
+                { registrationNumber: { contains: filters.search, mode: 'insensitive' } }
+            ];
+        }
         
-        const options = {
-            skip: parseInt(filters.skip) || 0,
-            take: parseInt(filters.take) || 50
-        };
+        const page = parseInt(filters.page) || 1;
+        const take = parseInt(filters.limit) || 10;
+        const skip = (page - 1) * take;
 
-        return transportRepo.findVehicles(where, options);
+        const { vehicles, total } = await transportRepo.findVehicles(where, { skip, take });
+        
+        return {
+            vehicles,
+            meta: {
+                total,
+                page,
+                limit: take,
+                totalPages: Math.ceil(total / take)
+            }
+        };
     }
 
     async getVehicleById(id) {
@@ -175,11 +190,30 @@ class TransportService {
 
     // --- Route Management ---
     async getRoutes(filters = {}) {
-        const options = {
-            skip: parseInt(filters.skip) || 0,
-            take: parseInt(filters.take) || 50
+        const where = {};
+        if (filters.search) {
+            where.OR = [
+                { name: { contains: filters.search, mode: 'insensitive' } },
+                { startLocation: { contains: filters.search, mode: 'insensitive' } },
+                { endLocation: { contains: filters.search, mode: 'insensitive' } }
+            ];
+        }
+
+        const page = parseInt(filters.page) || 1;
+        const take = parseInt(filters.limit) || 10;
+        const skip = (page - 1) * take;
+
+        const { routes, total } = await transportRepo.findRoutes(where, { skip, take });
+        
+        return {
+            routes,
+            meta: {
+                total,
+                page,
+                limit: take,
+                totalPages: Math.ceil(total / take)
+            }
         };
-        return transportRepo.findRoutes({}, options);
     }
 
     async getRouteById(id) {
@@ -244,10 +278,37 @@ class TransportService {
         if (!student) throw new NotFoundError('Student not found');
 
         const stop = await prisma.routeStop.findUnique({
-            where: { id: stopId }
+            where: { id: stopId },
+            include: { route: true }
         });
         if (!stop || stop.routeId !== routeId) {
             throw new ValidationError('Invalid stop or route combination');
+        }
+
+        // --- Capacity Check ---
+        // Find if any vehicle is currently assigned to this route
+        const activeTrip = await prisma.transportTrip.findFirst({
+            where: { routeId, status: 'IN_PROGRESS' },
+            include: { vehicle: true }
+        });
+
+        // Even if no active trip, we check the global allocation count for this route vs assigned vehicle capacity
+        // Note: Routes might have primary vehicles in a real enterprise setup, here we'll check the route's current allocations
+        const currentAllocations = await prisma.transportAllocation.count({
+          where: { routeId, status: 'ACTIVE' }
+        });
+
+        // If a vehicle is associated with this route (via any recent trip or primary assignment)
+        const vehicle = activeTrip?.vehicle || await prisma.vehicle.findFirst({
+            where: { trips: { some: { routeId } } } // Heuristic: Find vehicle that usually flies this route
+        });
+
+        if (vehicle && currentAllocations >= vehicle.capacity) {
+            // Check if this student is already allocated (update case)
+            const existing = await prisma.transportAllocation.findUnique({ where: { studentId } });
+            if (!existing || existing.routeId !== routeId) {
+                throw new ValidationError(`Route ${stop.route.name} is at full capacity (${vehicle.capacity} seats)`);
+            }
         }
 
         return transportRepo.upsertAllocation(studentId, {
@@ -259,11 +320,30 @@ class TransportService {
     }
 
     async getAllocations(filters = {}) {
-        const options = {
-            skip: parseInt(filters.skip) || 0,
-            take: parseInt(filters.take) || 50
+        const where = {};
+        if (filters.search) {
+            where.OR = [
+                { student: { user: { firstName: { contains: filters.search, mode: 'insensitive' } } } },
+                { student: { user: { lastName: { contains: filters.search, mode: 'insensitive' } } } },
+                { route: { name: { contains: filters.search, mode: 'insensitive' } } }
+            ];
+        }
+
+        const page = parseInt(filters.page) || 1;
+        const take = parseInt(filters.limit) || 10;
+        const skip = (page - 1) * take;
+
+        const { allocations, total } = await transportRepo.findAllocations(where, { skip, take });
+        
+        return {
+            allocations,
+            meta: {
+                total,
+                page,
+                limit: take,
+                totalPages: Math.ceil(total / take)
+            }
         };
-        return transportRepo.findAllocations({}, options);
     }
 
     // --- Trip Management ---
@@ -313,21 +393,34 @@ class TransportService {
             );
             const minDistance = Math.min(...distances);
 
-            // Trigger deviation alert based on dynamic threshold (e.g., 2000m or custom)
-            const threshold = settings.geofenceThreshold || 2000;
-            if (minDistance > threshold) {
+        // Trigger deviation alert based on dynamic threshold (e.g., 2000m or custom)
+        const threshold = settings.geofenceThreshold || 2000;
+        if (minDistance > threshold) {
+            // --- Bug Fix: Alert De-duplication ---
+            // Check if an alert was already triggered for this trip in the last 15 minutes
+            const fifteenMinutesAgo = new Date(getSchoolDate().getTime() - 15 * 60 * 1000);
+            const redundantAlert = await prisma.transportAlert.findFirst({
+                where: {
+                    tripId,
+                    type: 'ROUTE_DEVIATION',
+                    createdAt: { gte: fifteenMinutesAgo }
+                }
+            });
+
+            if (!redundantAlert) {
                 await prisma.transportAlert.create({
                     data: {
                         tripId,
                         vehicleId: trip.vehicleId,
                         type: 'ROUTE_DEVIATION',
                         severity: 'HIGH',
-                        message: `Vehicle ${trip.vehicle.name} deviated ${threshold}m+ from defined route points.`,
+                        message: `Vehicle ${trip.vehicle.name} deviated ${Math.round(minDistance)}m from defined route points. Threshold: ${threshold}m.`,
                         latitude,
                         longitude
                     }
                 });
             }
+        }
         }
 
         return log;

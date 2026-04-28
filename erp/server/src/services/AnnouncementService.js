@@ -1,6 +1,7 @@
 const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const announcementRepo = require('../repositories/AnnouncementRepository');
 const { emitEvent } = require('./socketService');
+const notificationService = require('./NotificationService');
 const NotFoundError = require('../errors/NotFoundError');
 const ValidationError = require('../errors/ValidationError');
 
@@ -60,6 +61,31 @@ class AnnouncementService {
         });
 
         emitEvent('ANNOUNCEMENT_CREATED', announcement, 'ALL');
+
+        // Create persistent notifications for the target audience
+        const mappedRoles = [];
+        if (!targetAudience || targetAudience === 'ALL' || (Array.isArray(targetAudience) && targetAudience.includes('ALL'))) {
+            mappedRoles.push('STUDENT', 'TEACHER', 'PARENT', 'ACCOUNTANT', 'LIBRARIAN', 'HR_MANAGER', 'INVENTORY_MANAGER', 'ADMISSION_MANAGER', 'ADMIN');
+        } else {
+            const audiences = Array.isArray(targetAudience) ? targetAudience : [targetAudience];
+            audiences.forEach(aud => {
+                if (aud === 'STUDENTS') mappedRoles.push('STUDENT');
+                if (aud === 'TEACHERS') mappedRoles.push('TEACHER');
+                if (aud === 'PARENTS') mappedRoles.push('PARENT');
+                if (aud === 'STAFF') mappedRoles.push('ACCOUNTANT', 'LIBRARIAN', 'HR_MANAGER', 'INVENTORY_MANAGER', 'ADMISSION_MANAGER');
+            });
+        }
+
+        if (mappedRoles.length > 0) {
+            notificationService.notifyRoles(mappedRoles, {
+                title: `New Announcement: ${title}`,
+                message: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+                type: 'ANNOUNCEMENT',
+                entityType: 'ANNOUNCEMENT',
+                entityId: announcement.id
+            });
+        }
+
         return announcement;
     }
 

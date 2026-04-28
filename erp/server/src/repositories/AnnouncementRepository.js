@@ -40,8 +40,8 @@ class AnnouncementRepository {
         return prisma.announcement.findMany({
             where,
             orderBy: [
-                { priority: 'desc' },
                 { createdAt: 'desc' },
+                { priority: 'desc' },
             ],
             take,
         });

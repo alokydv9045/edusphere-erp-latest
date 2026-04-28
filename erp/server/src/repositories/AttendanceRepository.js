@@ -47,8 +47,11 @@ class AttendanceRepository {
         });
     }
 
-    async findAttendanceRecords(where) {
-        return prisma.attendanceRecord.findMany({ where });
+    async findAttendanceRecords(where, options = {}) {
+        return prisma.attendanceRecord.findMany({ 
+            where,
+            ...options 
+        });
     }
 
     async findRFIDCard(cardNumber) {

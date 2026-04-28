@@ -4,28 +4,33 @@ const { getSchoolDate } = require('../utils/dateUtils');
 class TransportRepository {
     // --- Vehicle Management ---
     async findVehicles(where = {}, options = { skip: 0, take: 50 }) {
-        return prisma.vehicle.findMany({
-            where,
-            include: {
-                primaryDriver: {
-                    include: {
-                        user: {
-                            select: { firstName: true, lastName: true, phone: true }
+        const [vehicles, total] = await Promise.all([
+            prisma.vehicle.findMany({
+                where,
+                include: {
+                    primaryDriver: {
+                        include: {
+                            user: {
+                                select: { firstName: true, lastName: true, phone: true }
+                            }
+                        }
+                    },
+                    attendant: {
+                        include: {
+                            user: {
+                                select: { firstName: true, lastName: true, phone: true }
+                            }
                         }
                     }
                 },
-                attendant: {
-                    include: {
-                        user: {
-                            select: { firstName: true, lastName: true, phone: true }
-                        }
-                    }
-                }
-            },
-            orderBy: { name: 'asc' },
-            skip: options.skip,
-            take: options.take
-        });
+                orderBy: { name: 'asc' },
+                skip: options.skip,
+                take: options.take
+            }),
+            prisma.vehicle.count({ where })
+        ]);
+
+        return { vehicles, total };
     }
 
     async findVehicleById(id) {
@@ -54,18 +59,22 @@ class TransportRepository {
 
     // --- Route Management ---
     async findRoutes(where = {}, options = { skip: 0, take: 50 }) {
-        return prisma.transportRoute.findMany({
-            where,
-            include: {
-                stops: { orderBy: { order: 'asc' } },
-                _count: {
-                    select: { stops: true, allocations: true }
-                }
-            },
-            orderBy: { name: 'asc' },
-            skip: options.skip,
-            take: options.take
-        });
+        const [routes, total] = await Promise.all([
+            prisma.transportRoute.findMany({
+                where,
+                include: {
+                    stops: { orderBy: { order: 'asc' } },
+                    _count: {
+                        select: { stops: true, allocations: true }
+                    }
+                },
+                orderBy: { name: 'asc' },
+                skip: options.skip,
+                take: options.take
+            }),
+            prisma.transportRoute.count({ where })
+        ]);
+        return { routes, total };
     }
 
     async findRouteById(id) {
@@ -169,21 +178,25 @@ class TransportRepository {
     }
 
     async findAllocations(where = {}, options = { skip: 0, take: 50 }) {
-        return prisma.transportAllocation.findMany({
-            where,
-            include: {
-                student: {
-                    include: {
-                        user: { select: { firstName: true, lastName: true } },
-                        currentClass: { select: { name: true } }
-                    }
+        const [allocations, total] = await Promise.all([
+            prisma.transportAllocation.findMany({
+                where,
+                include: {
+                    student: {
+                        include: {
+                            user: { select: { firstName: true, lastName: true } },
+                            currentClass: { select: { name: true } }
+                        }
+                    },
+                    route: { select: { name: true } },
+                    stop: { select: { name: true } }
                 },
-                route: { select: { name: true } },
-                stop: { select: { name: true } }
-            },
-            skip: options.skip,
-            take: options.take
-        });
+                skip: options.skip,
+                take: options.take
+            }),
+            prisma.transportAllocation.count({ where })
+        ]);
+        return { allocations, total };
     }
 
     // --- Trip Tracking ---
