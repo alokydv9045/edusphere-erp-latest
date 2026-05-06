@@ -103,7 +103,9 @@ export default function DashboardPage() {
     if (['SUPER_ADMIN', 'ADMIN'].includes(role)) {
       fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'}/notifications/dashboard`, {
         headers: { Authorization: `Bearer ${(typeof window !== 'undefined' ? localStorage.getItem('auth_token') : '') || ''}` },
-      }).then(r => r.json()).then(d => { if (d.stats) setNotifStats(d.stats); }).catch(() => {});
+      }).then(r => r.json()).then(d => { if (d.stats) setNotifStats(d.stats); }).catch((err) => {
+        console.error('Failed to load notification stats', err);
+      });
     }
   };
 

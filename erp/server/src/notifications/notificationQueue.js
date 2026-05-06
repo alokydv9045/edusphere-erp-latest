@@ -35,11 +35,6 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 let notifQueue = null;
 let queueWorker = null;
 
-function getRedisConnection() {
-  // BullMQ accepts a URL string for Redis connection
-  return { url: REDIS_URL };
-}
-
 // ─────────────────────────────────────────────────────────────
 // Initialise queue + worker
 // ─────────────────────────────────────────────────────────────
@@ -50,12 +45,9 @@ function startQueueWorker() {
     return;
   }
 
-  // Check if REDIS_URL is explicitly configured; if still default, test before connecting
-  const redisUrl = REDIS_URL;
-
   try {
     const connection = {
-      url: redisUrl,
+      url: REDIS_URL,
       // BullMQ retries aggressively by default — limit it so we don't flood logs
       maxRetriesPerRequest: null,
       enableReadyCheck: false,

@@ -50,7 +50,7 @@ export default function DashboardLayout({
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="hidden lg:flex absolute z-30 top-4 items-center justify-center w-5 h-10 rounded-r-md bg-primary/10 hover:bg-primary/20 border border-l-0 border-border text-muted-foreground hover:text-primary transition-all"
-          style={{ left: sidebarCollapsed ? 0 : 'calc(var(--sidebar-width, 220px) - 0px)' }}
+          style={{ left: sidebarCollapsed ? 0 : 'var(--sidebar-width, 220px)' }}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {sidebarCollapsed
