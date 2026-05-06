@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { hrAPI, payrollAPI, serviceAPI } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 export default function MyHRPage() {
     const { user } = useAuth();
-    const { toast } = useToast();
+
 
     // ── Leaves State ─────────────────────────────────────────────────────
     const [balances, setBalances] = useState<any[]>([]);
@@ -75,15 +75,11 @@ export default function MyHRPage() {
                 endDate: leaveForm.endDate,
                 reason: leaveForm.reason
             });
-            toast({ title: 'Success', description: 'Leave application submitted' });
+            toast.success('Leave application submitted');
             setLeaveDialog(false);
             fetchData();
         } catch (err: any) {
-            toast({
-                title: 'Error',
-                description: err?.response?.data?.error || 'Failed to apply leave',
-                variant: 'destructive'
-            });
+            toast.error(err?.response?.data?.error || 'Failed to apply leave');
         } finally {
             setIsSubmitting(false);
         }

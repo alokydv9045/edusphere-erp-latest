@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, X, LayoutDashboard, Users, UserCog, GraduationCap, CalendarCheck, BookOpen, DollarSign, FileText, Package, Bell, Clock, Settings, User, Briefcase, ClipboardCheck, QrCode, Bus } from 'lucide-react';
+import { LogOut, X, LayoutDashboard, Users, UserCog, GraduationCap, CalendarCheck, BookOpen, DollarSign, FileText, Package, Bell, BellRing, Clock, Settings, User, Briefcase, ClipboardCheck, QrCode, Bus } from 'lucide-react';
 import { schoolConfigAPI } from '@/lib/api';
 
 const navigationConfig = [
@@ -27,9 +27,10 @@ const navigationConfig = [
     { name: 'Transport', href: '/dashboard/transport', icon: Bus, roles: ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'DRIVER', 'STUDENT', 'PARENT', 'ADMISSION_MANAGER'] },
     { name: 'My Schedule', href: '/dashboard/schedule', icon: Clock, roles: ['TEACHER'] },
     { name: 'Announcements', href: '/dashboard/announcements', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT'] },
+    { name: 'Notification Management', href: '/dashboard/notifications', icon: BellRing, roles: ['SUPER_ADMIN', 'ADMIN', 'NOTIFICATION_MANAGER'] },
     { name: 'Services', href: '/dashboard/services', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'STUDENT'] },
     { name: 'School Settings', href: '/dashboard/settings', icon: Settings, roles: ['SUPER_ADMIN'] },
-    { name: 'My Profile', href: '/dashboard/profile', icon: User, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'ACCOUNTANT', 'LIBRARIAN', 'INVENTORY_MANAGER', 'HR_MANAGER', 'ADMISSION_MANAGER'] },
+    { name: 'My Profile', href: '/dashboard/profile', icon: User, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'ACCOUNTANT', 'LIBRARIAN', 'INVENTORY_MANAGER', 'HR_MANAGER', 'ADMISSION_MANAGER', 'NOTIFICATION_MANAGER'] },
 ];
 
 export function MobileSidebar({ open, setOpen }: { open: boolean; setOpen: (val: boolean) => void }) {

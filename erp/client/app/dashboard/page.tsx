@@ -11,7 +11,7 @@ import {
   TrendingUp, TrendingDown, BookOpen, AlertCircle,
   FileText, UserPlus, CheckCircle2, Clock, BarChart3,
   CreditCard, Search, Printer, Receipt, ArrowRight,
-  MessageSquare, Bus
+  Bus, Phone, BellRing, XCircle, Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [accountantData, setAccountantData] = useState<any>(null);
   const [studentProfile, setStudentProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [notifStats, setNotifStats] = useState<{ sentToday: number; scheduledCount: number; pendingCount: number; failedCount: number } | null>(null);
 
   const loadDashboard = async () => {
     setIsLoading(true);
@@ -96,6 +97,13 @@ export default function DashboardPage() {
       console.error('Dashboard load error', err);
     } finally {
       setIsLoading(false);
+    }
+
+    // Load notification stats (non-blocking, only for admin roles)
+    if (['SUPER_ADMIN', 'ADMIN'].includes(role)) {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'}/notifications/dashboard`, {
+        headers: { Authorization: `Bearer ${(typeof window !== 'undefined' ? localStorage.getItem('auth_token') : '') || ''}` },
+      }).then(r => r.json()).then(d => { if (d.stats) setNotifStats(d.stats); }).catch(() => {});
     }
   };
 
@@ -426,80 +434,143 @@ export default function DashboardPage() {
 
       {/* ── Dynamic Layout (Recent Activity & Fee Summary) ── */}
       {isAdminOrPrincipal && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <div className="rounded-xl border bg-card text-card-foreground col-span-4 border-none shadow-sm overflow-hidden">
-            <div className="space-y-1.5 p-6 flex flex-row items-center justify-between pb-3 bg-muted/30">
-              <div>
-                <div className="leading-none tracking-tight flex items-center gap-2 text-foreground font-bold">
-                  <BarChart3 className="h-4 w-4 text-primary" aria-hidden="true" />Recent Activity
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <div className="rounded-xl border bg-card text-card-foreground col-span-4 border-none shadow-sm overflow-hidden">
+              <div className="space-y-1.5 p-6 flex flex-row items-center justify-between pb-3 bg-muted/30">
+                <div>
+                  <div className="leading-none tracking-tight flex items-center gap-2 text-foreground font-bold">
+                    <BarChart3 className="h-4 w-4 text-primary" aria-hidden="true" />Recent Activity
+                  </div>
+                  <div className="text-sm text-muted-foreground font-medium">Latest events across the school</div>
                 </div>
-                <div className="text-sm text-muted-foreground font-medium">Latest events across the school</div>
+              </div>
+              <div className="p-6 pt-4">
+                <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-primary/10">
+                  {recentActivities.map((activity, idx) => {
+                    const isFinancial = activity.type?.includes('FEE') || activity.type?.includes('PAYROLL');
+                    const isAcademic = activity.type?.includes('EXAM') || activity.type?.includes('STUDENT');
+
+                    return (
+                      <div key={idx} className="flex items-start gap-4 p-2 hover:bg-primary/5 rounded-lg transition-all border border-transparent hover:border-primary/10">
+                        <div className={cn(
+                          "mt-1 w-2 h-2 rounded-full shrink-0",
+                          isFinancial ? "bg-orange-500" : isAcademic ? "bg-blue-500" : "bg-primary"
+                        )}></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-foreground leading-tight">{activity.description}</p>
+                          <p className="text-[10px] font-black uppercase text-primary/60 mt-1 flex items-center gap-1">
+                            {activity.type?.replace(/_/g, ' ') || 'SYSTEM'} · <Clock className="h-3 w-3" /> {activity.time || 'Just now'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-            <div className="p-6 pt-4">
-              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-primary/10">
-                {recentActivities.map((activity, idx) => {
-                  const isFinancial = activity.type?.includes('FEE') || activity.type?.includes('PAYROLL');
-                  const isAcademic = activity.type?.includes('EXAM') || activity.type?.includes('STUDENT');
-                  
-                  return (
-                    <div key={idx} className="flex items-start gap-4 p-2 hover:bg-primary/5 rounded-lg transition-all border border-transparent hover:border-primary/10">
-                      <div className={cn(
-                        "mt-1 w-2 h-2 rounded-full shrink-0",
-                        isFinancial ? "bg-orange-500" : isAcademic ? "bg-blue-500" : "bg-primary"
-                      )}></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground leading-tight">{activity.description}</p>
-                        <p className="text-[10px] font-black uppercase text-primary/60 mt-1 flex items-center gap-1">
-                          {activity.type?.replace(/_/g, ' ') || 'SYSTEM'} · <Clock className="h-3 w-3" /> {activity.time || 'Just now'}
-                        </p>
-                      </div>
+
+            <div className="rounded-xl border bg-card text-card-foreground col-span-3 border-none shadow-sm overflow-hidden flex flex-col">
+              <div className="space-y-1.5 p-6 flex flex-row items-center justify-between pb-3 bg-muted/30">
+                <div>
+                  <div className="leading-none tracking-tight flex items-center gap-2 text-foreground font-bold italic">
+                    <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" />Fee Collection
+                  </div>
+                  <div className="text-sm text-muted-foreground font-medium">Current academic year summary</div>
+                </div>
+              </div>
+              <div className="p-6 pt-6 flex-1 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Expected</span>
+                    <span className="font-semibold">{formatINR(feeCollectionSummary.totalExpected)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Collected</span>
+                    <span className="font-semibold text-green-600">{formatINR(feeCollectionSummary.collected)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Pending</span>
+                    <span className="font-semibold text-destructive">{formatINR(feeCollectionSummary.pending)}</span>
+                  </div>
+                  <div className="pt-4">
+                    <div className="flex justify-between text-xs mb-2">
+                      <span className="font-black uppercase tracking-tighter text-primary">Collection Rate</span>
+                      <span className="font-black">{Number(feeCollectionSummary.collectionRate || 0).toFixed(1)}%</span>
                     </div>
-                  );
-                })}
+                    <Progress value={Number(feeCollectionSummary.collectionRate || 0)} className="h-2" />
+                  </div>
+                </div>
+                <Link href="/dashboard/fees" className="mt-8">
+                  <Button className="w-full gap-2 font-bold shadow-sm" variant="outline">
+                    View Full Report <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border bg-card text-card-foreground col-span-3 border-none shadow-sm overflow-hidden flex flex-col">
-            <div className="space-y-1.5 p-6 flex flex-row items-center justify-between pb-3 bg-muted/30">
-              <div>
-                <div className="leading-none tracking-tight flex items-center gap-2 text-foreground font-bold italic">
-                  <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" />Fee Collection
+          {/* ══════════════════════════════════════════════════════════════════════
+              NOTIFICATION STATS WIDGET (Admin / Super Admin)
+              ══════════════════════════════════════════════════════════════════════ */}
+          {notifStats && (
+            <Card className="border-l-4 border-l-violet-500">
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <BellRing className="h-4 w-4 text-violet-600" /> Notification Overview
+                  </CardTitle>
+                  <CardDescription>WhatsApp notification delivery stats</CardDescription>
                 </div>
-                <div className="text-sm text-muted-foreground font-medium">Current academic year summary</div>
-              </div>
-            </div>
-            <div className="p-6 pt-6 flex-1 flex flex-col justify-between">
-              <div className="space-y-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Expected</span>
-                  <span className="font-semibold">{formatINR(feeCollectionSummary.totalExpected)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Collected</span>
-                  <span className="font-semibold text-green-600">{formatINR(feeCollectionSummary.collected)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Pending</span>
-                  <span className="font-semibold text-destructive">{formatINR(feeCollectionSummary.pending)}</span>
-                </div>
-                <div className="pt-4">
-                  <div className="flex justify-between text-xs mb-2">
-                    <span className="font-black uppercase tracking-tighter text-primary">Collection Rate</span>
-                    <span className="font-black">{Number(feeCollectionSummary.collectionRate || 0).toFixed(1)}%</span>
+                <Link href="/dashboard/notifications">
+                  <Button variant="ghost" size="sm" className="gap-1 text-xs text-violet-600 hover:text-violet-700">
+                    Manage <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-2xl font-bold text-green-600">{notifStats.sentToday}</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sent Today</span>
                   </div>
-                  <Progress value={Number(feeCollectionSummary.collectionRate || 0)} className="h-2" />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-2xl font-bold text-blue-600">{notifStats.scheduledCount}</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Scheduled</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-2xl font-bold text-orange-600">{notifStats.pendingCount}</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><Send className="h-3 w-3" /> Pending</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-2xl font-bold text-red-600">{notifStats.failedCount}</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><XCircle className="h-3 w-3" /> Failed</span>
+                  </div>
                 </div>
-              </div>
-              <Link href="/dashboard/fees" className="mt-8">
-                <Button className="w-full gap-2 font-bold shadow-sm" variant="outline">
-                  View Full Report <ArrowRight className="h-4 w-4" />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          SECTION 3: Accountant Quick Actions
+          ══════════════════════════════════════════════════════════════════════ */}
+      {isAccountant && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/dashboard/fees/collect">
+                <Button className="gap-2 bg-green-600 hover:bg-green-700 text-white">
+                  <CreditCard className="h-4 w-4" /> Collect Fee
                 </Button>
               </Link>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ── Transport Horizontal Overview (Admin Only) ── */}

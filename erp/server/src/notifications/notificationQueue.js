@@ -1,68 +1,209 @@
-const logger = require('../config/logger');
-const redis = require('redis');
+'use strict';
 
-let redisClient;
-const REDIS_URL = process.env.REDIS_URL;
+/**
+ * Notification Queue Worker — uses BullMQ + existing Redis connection.
+ *
+ * HOW IT WORKS:
+ *  1. notificationService.enqueueAttendanceNotif / enqueueBulkNotif inserts rows
+ *     into the NotificationQueue Prisma table.
+ *  2. notificationScheduler calls processScheduledQueue() at the configured time.
+ *  3. processScheduledQueue() picks up PENDING rows whose scheduledAt ≤ now
+ *     and adds them as BullMQ jobs.
+ *  4. The BullMQ worker (startQueueWorker) processes each job, calls WhatsApp
+ *     gateway, then writes to NotificationLog.
+ *
+ * GRACEFUL DEGRADATION:
+ *  If Redis / BullMQ is not available (REDIS_URL not set, package not installed),
+ *  the module falls back to a direct-send mode that still works.
+ */
 
-if (REDIS_URL) {
-  redisClient = redis.createClient({ url: REDIS_URL });
-  redisClient.on('error', (err) => logger.error('Redis Client Error', err));
-  redisClient.connect().catch(err => {
-      logger.error('Failed to connect to Redis, notifications will be direct:', err);
-      redisClient = null;
-  });
-} else {
-  logger.info('REDIS_URL not configured. Notifications will be processed directly.');
+const prisma = require('../config/database');
+const { sendWhatsApp } = require('./whatsappGateway');
+
+// ─────────────────────────────────────────────────────────────
+// Try to load BullMQ — graceful fallback if not installed yet
+// ─────────────────────────────────────────────────────────────
+let Queue, Worker;
+try {
+  ({ Queue, Worker } = require('bullmq'));
+} catch {
+  console.warn('[NotificationQueue] BullMQ not installed. Run: npm install bullmq');
 }
 
-/**
- * Add a notification to the system
- * Gracefully handles Redis absence
- */
-const addNotification = async (data) => {
-  try {
-    if (redisClient && redisClient.isOpen) {
-      await redisClient.lPush('notification_queue', JSON.stringify(data));
-      logger.info('Added notification to Redis queue');
-    } else {
-      // Fallback: Direct processing (Fire and forget to avoid blocking main thread)
-      processNotification(data).catch(err => logger.error('Direct notification error:', err));
-    }
-  } catch (error) {
-    logger.error('Error in addNotification:', error);
-    processNotification(data).catch(err => logger.error('Direct notification fallback error:', err));
-  }
-};
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
-/**
- * Process notification (Email, SMS, App Push) with retry logic
- */
-const processNotification = async (data, retryCount = 0) => {
-  const MAX_RETRIES = 3;
-  
+let notifQueue = null;
+let queueWorker = null;
+
+function getRedisConnection() {
+  // BullMQ accepts a URL string for Redis connection
+  return { url: REDIS_URL };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Initialise queue + worker
+// ─────────────────────────────────────────────────────────────
+
+function startQueueWorker() {
+  if (!Queue || !Worker) {
+    console.warn('[NotificationQueue] BullMQ unavailable — using direct processing fallback.');
+    return;
+  }
+
+  // Check if REDIS_URL is explicitly configured; if still default, test before connecting
+  const redisUrl = REDIS_URL;
+
   try {
-    // Placeholder for notification delivery logic
-    // In a real environment, this would call AWS SES, Twilio, or other providers
-    logger.info(`Processing notification attempt ${retryCount + 1}:`, data);
-    
-    // Simulate periodic delivery failure for testing retry logic
-    // if (Math.random() < 0.3) throw new Error('Simulated delivery failure');
-    
-  } catch (error) {
-    if (retryCount < MAX_RETRIES) {
-      const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
-      logger.warn(`Notification failed (retry ${retryCount + 1}/${MAX_RETRIES}). Retrying in ${delay}ms... Error: ${error.message}`);
-      
-      setTimeout(() => {
-        processNotification(data, retryCount + 1);
-      }, delay);
+    const connection = {
+      url: redisUrl,
+      // BullMQ retries aggressively by default — limit it so we don't flood logs
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      lazyConnect: true,
+    };
+
+    notifQueue = new Queue('whatsapp-notifications', {
+      connection,
+      // Suppress BullMQ's internal connection retries
+    });
+
+    queueWorker = new Worker(
+      'whatsapp-notifications',
+      async (job) => {
+        const { queueRowId } = job.data;
+        await processOneQueueRow(queueRowId);
+      },
+      { connection, concurrency: 5 }
+    );
+
+    // ── Silence Redis ECONNREFUSED — fall back to direct mode ──
+    let redisDown = false;
+
+    const handleRedisError = (err) => {
+      if (redisDown) return; // only log once
+      if (err.code === 'ECONNREFUSED' || err.message?.includes('ECONNREFUSED')) {
+        redisDown = true;
+        console.warn(
+          '[NotificationQueue] Redis unavailable (ECONNREFUSED). ' +
+          'Falling back to direct DB processing. Start Redis to enable BullMQ.'
+        );
+        // Close queue & worker cleanly to stop further retries
+        Promise.all([
+          notifQueue?.close().catch(() => {}),
+          queueWorker?.close(true).catch(() => {}),
+        ]).then(() => {
+          notifQueue = null;
+          queueWorker = null;
+        });
+      } else {
+        console.error('[NotificationQueue] Redis error:', err.message);
+      }
+    };
+
+    notifQueue.on('error', handleRedisError);
+    queueWorker.on('error', handleRedisError);
+
+    queueWorker.on('completed', (job) => {
+      console.log(`[NotificationQueue] Job ${job.id} completed`);
+    });
+
+    queueWorker.on('failed', (job, err) => {
+      if (err.code !== 'ECONNREFUSED') {
+        console.error(`[NotificationQueue] Job ${job?.id} failed:`, err.message);
+      }
+    });
+
+    console.log('[NotificationQueue] BullMQ worker started');
+  } catch (err) {
+    console.error('[NotificationQueue] Failed to start BullMQ worker:', err.message);
+    notifQueue = null;
+    queueWorker = null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Core processor — can be called directly (fallback) or by BullMQ
+// ─────────────────────────────────────────────────────────────
+
+async function processOneQueueRow(queueRowId) {
+  const row = await prisma.notificationQueue.findUnique({ where: { id: queueRowId } });
+  if (!row || row.status !== 'PENDING') return;
+
+  // Mark as in-progress
+  await prisma.notificationQueue.update({
+    where: { id: queueRowId },
+    data: { status: 'PROCESSING' },
+  });
+
+  const result = await sendWhatsApp(row.phoneNumber, row.message);
+
+  if (result.success) {
+    await Promise.all([
+      prisma.notificationQueue.update({
+        where: { id: queueRowId },
+        data: { status: 'SENT', sentAt: new Date() },
+      }),
+      prisma.notificationLog.create({
+        data: {
+          recipientId: row.recipientId,
+          phoneNumber: row.phoneNumber,
+          message: row.message,
+          deliveryStatus: 'sent',
+          notifType: row.notifType,
+          providerResponse: JSON.stringify(result.providerResponse),
+        },
+      }),
+    ]);
+  } else {
+    await Promise.all([
+      prisma.notificationQueue.update({
+        where: { id: queueRowId },
+        data: {
+          status: 'FAILED',
+          failureReason: JSON.stringify(result.providerResponse).slice(0, 500),
+        },
+      }),
+      prisma.notificationLog.create({
+        data: {
+          recipientId: row.recipientId,
+          phoneNumber: row.phoneNumber,
+          message: row.message,
+          deliveryStatus: 'failed',
+          notifType: row.notifType,
+          providerResponse: JSON.stringify(result.providerResponse),
+        },
+      }),
+    ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Scheduler calls this to flush due rows
+// ─────────────────────────────────────────────────────────────
+
+async function processScheduledQueue() {
+  const dueRows = await prisma.notificationQueue.findMany({
+    where: {
+      status: 'PENDING',
+      scheduledAt: { lte: new Date() },
+    },
+    take: 500, // process at most 500 at a time
+  });
+
+  if (dueRows.length === 0) return;
+  console.log(`[NotificationQueue] Processing ${dueRows.length} due notification(s)`);
+
+  for (const row of dueRows) {
+    if (notifQueue) {
+      // BullMQ available — hand off to worker
+      await notifQueue.add('send', { queueRowId: row.id }, { attempts: 3, backoff: { type: 'exponential', delay: 5000 } });
     } else {
-      logger.error(`Critical: Notification delivery failed after ${MAX_RETRIES} retries. Data:`, data);
+      // Fallback: direct send (synchronous, no retry)
+      await processOneQueueRow(row.id).catch((e) =>
+        console.error('[NotificationQueue] Direct send error:', e.message)
+      );
     }
   }
-};
+}
 
-module.exports = {
-  addNotification,
-  processNotification
-};
+module.exports = { startQueueWorker, processScheduledQueue };

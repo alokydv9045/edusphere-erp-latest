@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, ChevronLeft, Loader2, BookOpen, Users } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from 'sonner';
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
@@ -36,7 +36,7 @@ export default function SubjectsPage() {
     const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
-    const { toast } = useToast();
+
 
     const [subjectForm, setSubjectForm] = useState({
         name: "",
@@ -64,15 +64,11 @@ export default function SubjectsPage() {
             setTeachers(teachersRes.teachers || []);
         } catch (error) {
             console.error("Failed to fetch subjects data", error);
-            toast({
-                title: "Error",
-                description: "Failed to load subjects data",
-                variant: "destructive",
-            });
+            toast.error('Failed to load subjects data');
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    }, []);
 
     useEffect(() => {
         fetchData();
@@ -83,19 +79,12 @@ export default function SubjectsPage() {
         setIsSubmitting(true);
         try {
             await academicAPI.createSubject(subjectForm);
-            toast({
-                title: "Success",
-                description: "Subject created successfully",
-            });
+            toast.success('Subject created successfully');
             setIsSubjectDialogOpen(false);
             setSubjectForm({ name: "", code: "", description: "", classId: "", type: "CORE", teacherId: "" });
             fetchData();
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error?.response?.data?.error || "Failed to create subject",
-                variant: "destructive",
-            });
+            toast.error(error?.response?.data?.error || 'Failed to create subject');
         } finally {
             setIsSubmitting(false);
         }
@@ -111,19 +100,12 @@ export default function SubjectsPage() {
                 subjectId: selectedSubjectId,
                 teacherId: assignForm.teacherId
             });
-            toast({
-                title: "Success",
-                description: "Teacher assigned to subject successfully",
-            });
+            toast.success('Teacher assigned to subject successfully');
             setIsAssignDialogOpen(false);
             setAssignForm({ teacherId: "" });
             fetchData();
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error?.response?.data?.error || "Failed to assign teacher",
-                variant: "destructive",
-            });
+            toast.error(error?.response?.data?.error || 'Failed to assign teacher');
         } finally {
             setIsSubmitting(false);
         }

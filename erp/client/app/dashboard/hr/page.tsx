@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import { hrAPI, payrollAPI, attendanceAPI, serviceAPI, academicAPI, scannerAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -50,7 +50,6 @@ const emptyForm = {
 
 export default function HRManagementPage() {
     const { socket } = useSocket();
-    const { toast } = useToast();
     const {
         isAdmin, isSuperAdmin, isHRManager, isPrincipal, isHOD,
         canManageHR, canApproveLeaves, canConductReviews, canViewPayroll
@@ -144,11 +143,11 @@ export default function HRManagementPage() {
             setEmployees(data.employees || []);
             setTotalEmployees(data.pagination?.total || 0);
         } catch {
-            toast({ title: 'Error', description: 'Failed to load employees', variant: 'destructive' });
+            toast.error('Failed to load employees');
         } finally {
             setIsLoading(false);
         }
-    }, [search, typeFilter, statusFilter, toast]);
+    }, [search, typeFilter, statusFilter]);
 
     const [scanners, setScanners] = useState<any[]>([]);
 
@@ -219,19 +218,15 @@ export default function HRManagementPage() {
         try {
             if (editingEmp) {
                 await hrAPI.updateEmployee(editingEmp.id, empForm);
-                toast({ title: 'Success', description: 'Employee updated successfully' });
+                toast.success('Employee updated successfully');
             } else {
                 await hrAPI.createEmployee(empForm);
-                toast({ title: 'Success', description: 'Employee created successfully' });
+                toast.success('Employee created successfully');
             }
             setEmpDialog(false);
             fetchEmployees();
         } catch (err: any) {
-            toast({
-                title: 'Error',
-                description: err?.response?.data?.error || 'Operation failed',
-                variant: 'destructive',
-            });
+            toast.error(err?.response?.data?.error || 'Operation failed');
         } finally {
             setIsSubmitting(false);
         }
@@ -244,13 +239,10 @@ export default function HRManagementPage() {
                 isActive: newActive,
                 status: newActive ? 'ACTIVE' : 'RESIGNED',
             });
-            toast({
-                title: 'Success',
-                description: `Employee ${newActive ? 'activated' : 'deactivated'}`,
-            });
+            toast.success(`Employee ${newActive ? 'activated' : 'deactivated'}`);
             fetchEmployees();
         } catch {
-            toast({ title: 'Error', description: 'Status update failed', variant: 'destructive' });
+            toast.error('Status update failed');
         }
     };
 
@@ -276,15 +268,11 @@ export default function HRManagementPage() {
                 allowances: parseFloat(salaryForm.allowances),
                 deductions: parseFloat(salaryForm.deductions),
             });
-            toast({ title: 'Success', description: 'Salary structure saved' });
+            toast.success('Salary structure saved');
             setSalaryDialog(false);
             fetchEmployees();
         } catch (err: any) {
-            toast({
-                title: 'Error',
-                description: err?.response?.data?.error || 'Failed to save salary',
-                variant: 'destructive',
-            });
+            toast.error(err?.response?.data?.error || 'Failed to save salary');
         } finally {
             setIsSalarySubmitting(false);
         }
@@ -295,18 +283,14 @@ export default function HRManagementPage() {
         setIsGenerating(true);
         try {
             const data = await payrollAPI.generatePayroll(payMonth, payYear);
-            toast({ title: 'Payroll Generated', description: data.message });
+            toast.success(data.message || 'Payroll generated');
             fetchPayroll();
         } catch (err: any) {
             const errMsg = err?.response?.data?.message ||
                 (typeof err?.response?.data?.error === 'string' ? err?.response?.data?.error : null) ||
                 err?.message ||
                 "Failed to generate payroll";
-            toast({
-                title: 'Error',
-                description: errMsg,
-                variant: 'destructive',
-            });
+            toast.error(errMsg);
         } finally {
             setIsGenerating(false);
         }
@@ -315,10 +299,10 @@ export default function HRManagementPage() {
     const handleMarkPaid = async (payrollId: string) => {
         try {
             await payrollAPI.markPaid(payrollId);
-            toast({ title: 'Success', description: 'Marked as paid' });
+            toast.success('Marked as paid');
             fetchPayroll();
         } catch {
-            toast({ title: 'Error', description: 'Failed to mark as paid', variant: 'destructive' });
+            toast.error('Failed to mark as paid');
         }
     };
 
@@ -363,11 +347,11 @@ export default function HRManagementPage() {
             }
         } catch (error) {
             console.error('Error fetching staff attendance:', error);
-            toast({ title: 'Error', description: 'Failed to fetch staff list', variant: 'destructive' });
+            toast.error('Failed to fetch staff list');
         } finally {
             setIsAttLoading(false);
         }
-    }, [attType, attDate, toast]);
+    }, [attType, attDate]);
 
     useEffect(() => {
         fetchStaffForAttendance();
@@ -402,9 +386,9 @@ export default function HRManagementPage() {
             };
             await attendanceAPI.submitStaffAttendance(payload);
             setIsAlreadyMarked(true);
-            toast({ title: 'Success', description: 'Attendance submitted successfully' });
+            toast.success('Attendance submitted successfully');
         } catch (err: any) {
-            toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to submit attendance', variant: 'destructive' });
+            toast.error(err?.response?.data?.error || 'Failed to submit attendance');
         } finally {
             setIsAttLoading(false);
         }
@@ -417,11 +401,11 @@ export default function HRManagementPage() {
             const data = await serviceAPI.getAll({ type: 'LEAVE' });
             setLeaves(data || []);
         } catch {
-            toast({ title: 'Error', description: 'Failed to fetch leave requests', variant: 'destructive' });
+            toast.error('Failed to fetch leave requests');
         } finally {
             setIsLeavesLoading(false);
         }
-    }, [toast]);
+    }, []);
 
     useEffect(() => {
         fetchLeaves();
@@ -460,11 +444,11 @@ export default function HRManagementPage() {
         if (!selectedLeave) return;
         try {
             await hrAPI.processLeave(selectedLeave.id, { status, remarks: processRemarks });
-            toast({ title: 'Success', description: `Leave request ${status.toLowerCase()}` });
+            toast.success(`Leave request ${status.toLowerCase()}`);
             setLeaveProcessDialog(false);
             fetchLeaves();
         } catch (err: any) {
-            toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to process leave', variant: 'destructive' });
+            toast.error(err?.response?.data?.error || 'Failed to process leave');
         }
     };
 
@@ -488,10 +472,10 @@ export default function HRManagementPage() {
                 employeeId: reviewEmp.id,
                 ...reviewForm
             });
-            toast({ title: 'Success', description: 'Performance review submitted' });
+            toast.success('Performance review submitted');
             setReviewDialog(false);
         } catch (err: any) {
-            toast({ title: 'Error', description: err?.response?.data?.error || 'Failed to submit review', variant: 'destructive' });
+            toast.error(err?.response?.data?.error || 'Failed to submit review');
         } finally {
             setIsReviewSubmitting(false);
         }

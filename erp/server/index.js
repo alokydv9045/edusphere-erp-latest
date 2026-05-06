@@ -163,7 +163,18 @@ server.listen(PORT, () => {
   logger.info(`🏫 School: ${process.env.SCHOOL_NAME} (${process.env.SCHOOL_ID})`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
-  
+
   // Start Backup Scheduler
   initScheduler();
+
+  // Start notification scheduler and queue worker
+  try {
+    const { startScheduler } = require('./src/notifications/notificationScheduler');
+    const { startQueueWorker } = require('./src/notifications/notificationQueue');
+    startQueueWorker();
+    startScheduler();
+    logger.info('🔔 Notification scheduler & queue worker started');
+  } catch (err) {
+    logger.warn('⚠️  Notification scheduler could not start (install bullmq + node-cron):', err.message);
+  }
 });

@@ -20,6 +20,7 @@ export function TopAnnouncementBar() {
     const [isHovered, setIsHovered] = useState(false);
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<any>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDismissed, setIsDismissed] = useState(false);
     const [contentWidth, setContentWidth] = useState(2000);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -53,7 +54,7 @@ export function TopAnnouncementBar() {
         }
     }, []);
 
-    if (isLoading || announcements.length === 0) {
+    if (isLoading || announcements.length === 0 || isDismissed) {
         return null;
     }
 
@@ -99,7 +100,7 @@ export function TopAnnouncementBar() {
                     ref={(node) => {
                         measureWidth(node);
                     }}
-                    className="flex whitespace-nowrap gap-12 pl-32 items-center"
+                    className="flex whitespace-nowrap gap-12 pl-32 pr-10 items-center"
                     animate={{
                         x: isHovered ? 0 : [0, -contentWidth],
                     }}
@@ -134,7 +135,15 @@ export function TopAnnouncementBar() {
                     ))}
                 </motion.div>
 
-                <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-primary to-transparent pointer-events-none z-10" />
+                <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-slate-900 to-transparent pointer-events-none z-10" />
+                {/* Dismiss button */}
+                <button
+                    onClick={() => setIsDismissed(true)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                    title="Dismiss announcements"
+                >
+                    <X className="h-3 w-3" />
+                </button>
             </div>
 
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

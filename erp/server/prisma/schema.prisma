@@ -1341,6 +1341,7 @@ enum UserRole {
   PRINCIPAL
   HOD
   STAFF
+  NOTIFICATION_MANAGER
 }
 
 enum Gender {
@@ -1767,4 +1768,82 @@ enum CalendarAudience {
   STUDENTS
   PARENTS
   STAFF
+}
+
+// ============================================
+// NOTIFICATION SYSTEM
+// ============================================
+
+enum NotifTemplateType {
+  ATTENDANCE
+  HOMEWORK
+  FEE_REMINDER
+  ANNOUNCEMENT
+  CUSTOM
+}
+
+enum QueueStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+model NotificationSettings {
+  id                         String   @id @default(uuid())
+  attendanceNotificationTime String   @default("10:30") // HH:mm 24-hour
+  attendanceNotifEnabled     Boolean  @default(true)
+  homeworkNotifEnabled       Boolean  @default(false)
+  feeReminderEnabled         Boolean  @default(true)
+  announcementEnabled        Boolean  @default(true)
+  updatedBy                  String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model NotificationTemplate {
+  id            String            @id @default(uuid())
+  templateName  String            @unique
+  templateType  NotifTemplateType
+  messageBody   String            @db.Text
+  variables     String[]          // e.g. ["student_name", "class", "status", "date"]
+  isActive      Boolean           @default(true)
+  createdBy     String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model NotificationQueue {
+  id            String            @id @default(uuid())
+  recipientType String            // "STUDENT_PARENT", "TEACHER", "STAFF", "CUSTOM"
+  recipientId   String?           // studentId / teacherId / staffId
+  phoneNumber   String
+  message       String            @db.Text
+  status        QueueStatus       @default(PENDING)
+  notifType     NotifTemplateType
+  templateId    String?
+  scheduledAt   DateTime
+  sentAt        DateTime?
+  failureReason String?           @db.Text
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([notifType])
+}
+
+model NotificationLog {
+  id               String            @id @default(uuid())
+  recipientId      String?
+  phoneNumber      String
+  message          String            @db.Text
+  deliveryStatus   String            // "sent", "delivered", "failed", "read"
+  notifType        NotifTemplateType
+  providerResponse String?           @db.Text
+  sentAt           DateTime          @default(now())
+
+  @@index([sentAt])
+  @@index([deliveryStatus])
+  @@index([notifType])
 }

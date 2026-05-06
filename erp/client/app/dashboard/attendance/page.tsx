@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Loader2, Check, X, Calendar, Save, Plus, Trash2, Clock, Users, BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import {
   ResponsiveContainer,
   BarChart,
@@ -49,7 +49,7 @@ function statusLabel(status: string | undefined) {
 
 export default function AttendancePage() {
   const { canMarkAttendance } = usePermissions();
-  const { toast } = useToast();
+
 
   // ── Filters ────────────────────────────────────────────────────────────
   const [classes, setClasses] = useState<any[]>([]);
@@ -103,18 +103,18 @@ export default function AttendancePage() {
       const data = await academicAPI.getClasses();
       setClasses(data.classes || []);
     } catch {
-      toast({ title: 'Error', description: 'Failed to fetch classes', variant: 'destructive' });
+      toast.error('Failed to fetch classes');
     }
-  }, [toast]);
+  }, []);
 
   const fetchSections = useCallback(async (classId: string) => {
     try {
       const data = await academicAPI.getSections({ classId });
       setSections(data.sections || []);
     } catch {
-      toast({ title: 'Error', description: 'Failed to fetch sections', variant: 'destructive' });
+      toast.error('Failed to fetch sections');
     }
-  }, [toast]);
+  }, []);
 
   const fetchAnalyticsSections = useCallback(async (classId: string) => {
     try {
@@ -145,11 +145,11 @@ export default function AttendancePage() {
       const data = await attendanceAPI.getSlots(params);
       setSlots(data.slots || []);
     } catch {
-      toast({ title: 'Error', description: 'Failed to load slots', variant: 'destructive' });
+      toast.error('Failed to load slots');
     } finally {
       setIsSlotsLoading(false);
     }
-  }, [selectedDate, selectedClass, attendeeType, toast]);
+  }, [selectedDate, selectedClass, attendeeType]);
 
   const fetchAnalytics = useCallback(async () => {
     setIsAnalyticsLoading(true);
@@ -181,7 +181,7 @@ export default function AttendancePage() {
         attendance: data.attendance || {},
       });
     } catch {
-      toast({ title: 'Error', description: 'Could not load attendance details', variant: 'destructive' });
+      toast.error('Could not load attendance details');
     } finally {
       setIsDetailLoading(false);
     }
@@ -228,15 +228,11 @@ export default function AttendancePage() {
         classId: attendeeType === 'STUDENT' ? selectedClass : undefined,
         sectionId: (attendeeType === 'STUDENT' && selectedSection) ? selectedSection : undefined,
       });
-      toast({ title: 'Success', description: 'Attendance slot created' });
+      toast.success('Attendance slot created');
       fetchSlots();
       if (selectedDate === todayStr) fetchTodayOverview();
     } catch (err: any) {
-      toast({
-        title: 'Error',
-        description: err?.response?.data?.error || 'Failed to create slot',
-        variant: 'destructive',
-      });
+      toast.error(err?.response?.data?.error || 'Failed to create slot');
     } finally {
       setIsCreating(false);
     }
@@ -246,7 +242,7 @@ export default function AttendancePage() {
     if (!deletingSlot) return;
     try {
       await attendanceAPI.deleteSlot(deletingSlot.id);
-      toast({ title: 'Success', description: 'Slot deleted' });
+      toast.success('Slot deleted');
       setDeleteDialog(false);
       setDeletingSlot(null);
       if (activeSlot?.id === deletingSlot.id) {
@@ -256,11 +252,7 @@ export default function AttendancePage() {
       fetchSlots();
       if (selectedDate === todayStr) fetchTodayOverview();
     } catch (err: any) {
-      toast({
-        title: 'Error',
-        description: err?.response?.data?.error || 'Failed to delete slot',
-        variant: 'destructive',
-      });
+      toast.error(err?.response?.data?.error || 'Failed to delete slot');
     }
   };
 
@@ -279,7 +271,7 @@ export default function AttendancePage() {
       });
       setAttendance(initial);
     } catch {
-      toast({ title: 'Error', description: 'Failed to load list', variant: 'destructive' });
+      toast.error('Failed to load list');
     } finally {
       setIsStudentsLoading(false);
     }
@@ -310,15 +302,11 @@ export default function AttendancePage() {
         status,
       }));
       await attendanceAPI.submitSlotAttendance(activeSlot.id, attendanceData);
-      toast({ title: 'Success', description: `Attendance saved for ${attendanceData.length} entries` });
+      toast.success(`Attendance saved for ${attendanceData.length} entries`);
       fetchSlots();
       setActiveSlot((prev: any) => prev ? { ...prev, status: 'COMPLETED' } : null);
     } catch (err: any) {
-      toast({
-        title: 'Error',
-        description: err?.response?.data?.error || 'Failed to submit attendance',
-        variant: 'destructive',
-      });
+      toast.error(err?.response?.data?.error || 'Failed to submit attendance');
     } finally {
       setIsSubmitting(false);
     }

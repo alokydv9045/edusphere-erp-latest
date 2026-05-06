@@ -12,7 +12,6 @@ const { validateAndNormalizeRoles } = require('../utils/userUtils');
  * - All other users can have multiple roles
  * - ADMIN represents the Principal with full access
  */
-
 // validateRoles removed - now using validateAndNormalizeRoles from userUtils
 
 /**

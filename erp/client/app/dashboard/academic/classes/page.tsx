@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, ChevronLeft, Loader2, Users } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from 'sonner';
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
@@ -35,7 +35,7 @@ export default function ClassesPage() {
     const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
     const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { toast } = useToast();
+
 
     const [classForm, setClassForm] = useState({
         name: "",
@@ -66,15 +66,11 @@ export default function ClassesPage() {
             }
         } catch (error) {
             console.error("Failed to fetch classes data", error);
-            toast({
-                title: "Error",
-                description: "Failed to load classes data",
-                variant: "destructive",
-            });
+            toast.error('Failed to load classes data');
         } finally {
             setIsLoading(false);
         }
-    }, [toast, classForm.academicYearId]);
+    }, [classForm.academicYearId]);
 
     useEffect(() => {
         fetchData();
@@ -85,19 +81,12 @@ export default function ClassesPage() {
         setIsSubmitting(true);
         try {
             await academicAPI.createClass(classForm);
-            toast({
-                title: "Success",
-                description: "Class created successfully",
-            });
+            toast.success('Class created successfully');
             setIsClassDialogOpen(false);
             setClassForm({ ...classForm, name: "", numericValue: "", description: "" });
             fetchData();
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error?.response?.data?.error || "Failed to create class",
-                variant: "destructive",
-            });
+            toast.error(error?.response?.data?.error || 'Failed to create class');
         } finally {
             setIsSubmitting(false);
         }
@@ -114,19 +103,12 @@ export default function ClassesPage() {
                 maxStudents: sectionForm.capacity,
                 classId: selectedClassId
             });
-            toast({
-                title: "Success",
-                description: "Section added successfully",
-            });
+            toast.success('Section added successfully');
             setIsSectionDialogOpen(false);
             setSectionForm({ name: "", capacity: "40" });
             fetchData();
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error?.response?.data?.error || "Failed to add section",
-                variant: "destructive",
-            });
+            toast.error(error?.response?.data?.error || 'Failed to add section');
         } finally {
             setIsSubmitting(false);
         }

@@ -2,6 +2,7 @@ const AttendanceService = require('../services/AttendanceService');
 const { emitEvent } = require('../services/socketService');
 const asyncHandler = require('../utils/asyncHandler');
 const { ROLES } = require('../constants');
+const notifService = require('../notifications/notificationService');
 
 // Mark attendance (manual or RFID)
 const markAttendance = asyncHandler(async (req, res) => {
@@ -18,6 +19,11 @@ const markAttendance = asyncHandler(async (req, res) => {
     date: attendance.date,
     studentName: `${attendance.student.user.firstName} ${attendance.student.user.lastName}`
   }, 'ADMIN');
+
+  notifService.enqueueAttendanceNotif(attendance.studentId, {
+    status: attendance.status,
+    date: attendance.date,
+  }).catch(() => {});
 });
 
 // Get attendance for a date
@@ -48,6 +54,10 @@ const handleRFIDScan = asyncHandler(async (req, res) => {
       studentName: `${student.user.firstName} ${student.user.lastName}`,
       type: 'RFID'
     }, 'ADMIN');
+    notifService.enqueueAttendanceNotif(attendance.studentId, {
+      status: attendance.status,
+      date: attendance.date,
+    }).catch(() => {});
   }
 });
 
