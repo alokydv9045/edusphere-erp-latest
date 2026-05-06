@@ -331,7 +331,7 @@ class StudentService {
         const rollNumber = (studentCount + 1).toString();
 
         // 3. Generate Admission Number
-        const admissionNumber = `ADM${Date.now()}`;
+        const admissionNumber = `ADM${Date.now()}${Math.floor(100 + Math.random() * 899)}`;
 
         // Validate essential relations before starting Transaction to fail fast
         const [cls, section, yearRecord] = await Promise.all([
@@ -385,11 +385,11 @@ class StudentService {
             // C. Create User Login
             const user = await tx.user.create({
                 data: {
-                    email: `${username}@school.com`, // Dummy email fallback
+                    email: data.email || `${username}@school.com`, 
                     username: username,
                     password: hashedPassword,
                     firstName: data.firstName,
-                    lastName: data.lastName,
+                    lastName: data.lastName || '',
                     dateOfBirth: new Date(data.dateOfBirth),
                     gender: data.gender,
                     bloodGroup: data.bloodGroup,
@@ -431,7 +431,7 @@ class StudentService {
                     parents: {
                         create: [
                             { parentId: father.id, relationship: 'FATHER' },
-                            ...(mother ? [{ parentId: mother.id, relationship: 'MOTHER' }] : [])
+                            ...(mother && mother.id !== father.id ? [{ parentId: mother.id, relationship: 'MOTHER' }] : [])
                         ]
                     }
                 }
@@ -453,6 +453,8 @@ class StudentService {
 
             // F. Process Fee Assignment & Initial Payment
             let feePayments = [];
+            let remainingInitialPayment = data.initialPayment?.amount || 0;
+
             if (data.feeStructureIds && data.feeStructureIds.length > 0) {
                 const receiptBase = `REC${Date.now()}`;
 
@@ -476,17 +478,14 @@ class StudentService {
                             }
                         });
 
-                        // Make initial payment if one was provided and totalPayable > 0
-                        const requestedAmount = data.initialPayment?.amount || 0;
-                        if (requestedAmount > 0 && totalPayable > 0) {
-                            // Clamp: never allow paying more than what is owed
-                            const paymentAmount = Math.min(requestedAmount, totalPayable);
-                            const remainingBalance = totalPayable - paymentAmount;
-                            const isPaidInFull = remainingBalance === 0;
+                        // Apply a portion of the initial payment if balance remains
+                        if (remainingInitialPayment > 0 && totalPayable > 0) {
+                            const paymentAmount = Math.min(remainingInitialPayment, totalPayable);
+                            const remainingBalanceForLedger = totalPayable - paymentAmount;
 
                             const payment = await tx.feePayment.create({
                                 data: {
-                                    receiptNumber: `${receiptBase}-${structureId.slice(0, 6)}`,
+                                    receiptNumber: `${receiptBase}-${structureId.slice(0, 4)}-${Math.floor(Math.random() * 1000)}`,
                                     studentId: student.id,
                                     feeStructureId: structureId,
                                     ledgerId: ledger.id,
@@ -503,18 +502,18 @@ class StudentService {
                                 },
                             });
 
-                            // Update ledger to reflect the admission payment
+                            // Update ledger to reflect the payment
                             await tx.studentFeeLedger.update({
                                 where: { id: ledger.id },
                                 data: {
                                     totalPaid: paymentAmount,
-                                    totalPending: remainingBalance,
-                                    // PAID if fully settled, PARTIAL if balance remains
-                                    status: isPaidInFull ? 'PAID' : 'PARTIAL'
+                                    totalPending: remainingBalanceForLedger,
+                                    status: remainingBalanceForLedger <= 0 ? 'PAID' : 'PARTIAL'
                                 }
                             });
 
                             feePayments.push(payment);
+                            remainingInitialPayment -= paymentAmount;
                         }
                     }
                 }

@@ -64,6 +64,32 @@ export default function FeesPage() {
   const [payingLedgerId, setPayingLedgerId] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  const [reportFilters, setReportFilters] = useState({
+    classId: 'all',
+    sectionId: 'all',
+    month: 'all',
+  });
+  const [reportStudents, setReportStudents] = useState<any[]>([]);
+  const [isReportsLoading, setIsReportsLoading] = useState(false);
+
+  const fetchReportData = useCallback(async () => {
+    setIsReportsLoading(true);
+    try {
+      const params: any = { limit: 1000 };
+      if (reportFilters.classId !== 'all') params.classId = reportFilters.classId;
+      if (reportFilters.sectionId !== 'all') params.sectionId = reportFilters.sectionId;
+      if (reportFilters.month !== 'all') params.month = reportFilters.month;
+
+      const res = await feeAPI.getFeeStudents(params);
+      setReportStudents(res.students || []);
+    } catch (err) {
+      console.error('Failed to fetch report data', err);
+      toast.error('Failed to load report data');
+    } finally {
+      setIsReportsLoading(false);
+    }
+  }, [reportFilters.classId, reportFilters.sectionId, reportFilters.month]);
+
   const { canManageFeeStructures, canCollectFees, canRegisterStudents, isStudent } = usePermissions();
   const { user } = useAuth();
   const [feeData, setFeeData] = useState<any>(null);
@@ -169,6 +195,12 @@ export default function FeesPage() {
       fetchStudents();
     }
   }, [isStudent, fetchStudents]);
+
+  useEffect(() => {
+    if (!isStudent) {
+      fetchReportData();
+    }
+  }, [isStudent, fetchReportData]);
 
   const handleCreateStructure = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1011,14 +1043,14 @@ export default function FeesPage() {
         </TabsContent>
 
         {/* ── Reports Tab ── */}
-        <TabsContent value="reports" className="space-y-4">
+        <TabsContent value="reports" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center">
                   <p className="text-sm font-medium text-muted-foreground">Total Collected</p>
                   <p className="text-3xl font-bold text-green-600">
-                    ₹{stats.summary.totalCollected.toLocaleString()}
+                    ₹{stats.summary?.totalCollected?.toLocaleString() || '0'}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">This month</p>
                 </div>
@@ -1029,7 +1061,7 @@ export default function FeesPage() {
                 <div className="text-center">
                   <p className="text-sm font-medium text-muted-foreground">Pending</p>
                   <p className="text-3xl font-bold text-orange-600">
-                    ₹{stats.summary.pending.toLocaleString()}
+                    ₹{stats.summary?.pending?.toLocaleString() || '0'}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">Due this month</p>
                 </div>
@@ -1039,7 +1071,7 @@ export default function FeesPage() {
               <CardContent className="pt-6">
                 <div className="text-center">
                   <p className="text-sm font-medium text-muted-foreground">Collection Rate</p>
-                  <p className="text-3xl font-bold">{stats.summary.collectionRate}%</p>
+                  <p className="text-3xl font-bold">{stats.summary?.collectionRate || 0}%</p>
                   <p className="mt-2 text-xs text-muted-foreground">Current month</p>
                 </div>
               </CardContent>
@@ -1068,7 +1100,6 @@ export default function FeesPage() {
               colors={["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"]}
             />
           </div>
-
           <Card>
             <CardHeader>
               <CardTitle>Top Defaulters</CardTitle>
@@ -1105,6 +1136,269 @@ export default function FeesPage() {
                   </TableBody>
                 </Table>
               </div>
+            </CardContent>
+          </Card>
+
+          <div className="h-px bg-border my-6" />
+
+          <Card className="border shadow-sm">
+            <CardHeader>
+              <CardTitle>Class & Section Filtered Reports</CardTitle>
+              <CardDescription>Select filters to view and export class/section-wise fee details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Class</Label>
+                  <Select
+                    value={reportFilters.classId}
+                    onValueChange={(val) => setReportFilters(f => ({ ...f, classId: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Classes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Classes</SelectItem>
+                      {classes.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Section</Label>
+                  <Select
+                    value={reportFilters.sectionId}
+                    onValueChange={(val) => setReportFilters(f => ({ ...f, sectionId: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Sections" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sections</SelectItem>
+                      {sections.map((s: any) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Month (Optional)</Label>
+                  <Select
+                    value={reportFilters.month}
+                    onValueChange={(val) => setReportFilters(f => ({ ...f, month: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Months" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Months</SelectItem>
+                      <SelectItem value="1">January</SelectItem>
+                      <SelectItem value="2">February</SelectItem>
+                      <SelectItem value="3">March</SelectItem>
+                      <SelectItem value="4">April</SelectItem>
+                      <SelectItem value="5">May</SelectItem>
+                      <SelectItem value="6">June</SelectItem>
+                      <SelectItem value="7">July</SelectItem>
+                      <SelectItem value="8">August</SelectItem>
+                      <SelectItem value="9">September</SelectItem>
+                      <SelectItem value="10">October</SelectItem>
+                      <SelectItem value="11">November</SelectItem>
+                      <SelectItem value="12">December</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button onClick={fetchReportData} disabled={isReportsLoading} className="h-10">
+                    {isReportsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                    Generate
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!reportStudents || reportStudents.length === 0) {
+                        toast.error('No data available to export');
+                        return;
+                      }
+
+                      const headers = ['Student Name', 'Admission No', 'Class', 'Section', 'Payable Amount', 'Amount Paid', 'Balance Due', 'Status'];
+                      const rows = reportStudents.map(s => [
+                        `"${s.name}"`,
+                        `"${s.admissionNumber}"`,
+                        `"${s.className}"`,
+                        `"${s.sectionName}"`,
+                        s.totalPayable,
+                        s.totalPaid,
+                        s.totalPending,
+                        `"${s.feeStatus}"`
+                      ]);
+
+                      const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', `Fee_Report_Class_${reportFilters.classId}_Sec_${reportFilters.sectionId}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      toast.success('Fee report exported successfully');
+                    }}
+                    className="h-10 text-xs border-green-600 text-green-700 hover:bg-green-50"
+                  >
+                    Export CSV
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Metrics summary specifically for the filtered reports */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Filtered Total Collection</p>
+                  <p className="text-3xl font-bold text-green-600 mt-1">
+                    ₹{reportStudents.reduce((sum, s) => sum + (s.totalPaid || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Amount collected</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Filtered Total Pending</p>
+                  <p className="text-3xl font-bold text-red-600 mt-1">
+                    ₹{reportStudents.reduce((sum, s) => sum + (s.totalPending || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Amount due</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Submission Rate</p>
+                  <p className="text-3xl font-bold text-blue-600 mt-1">
+                    {reportStudents.length > 0 
+                      ? Math.round((reportStudents.filter(s => s.feeStatus === 'PAID').length / reportStudents.length) * 100)
+                      : 0}%
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Of filtered students</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="border shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold">Student Counts</CardTitle>
+                <CardDescription>Breakdown of students with dues vs settled</CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-around items-center h-[120px]">
+                <div className="text-center">
+                  <p className="text-4xl font-extrabold text-slate-800">{reportStudents.length}</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase mt-1">Total Students</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-4xl font-extrabold text-emerald-600">
+                    {reportStudents.filter(s => s.feeStatus === 'PAID').length}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase mt-1">Paid Fully</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-4xl font-extrabold text-red-600">
+                    {reportStudents.filter(s => s.totalPending > 0).length}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase mt-1">Has Dues</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold">Overall Stats</CardTitle>
+                <CardDescription>Total outstanding vs collected for the current filters</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col justify-center h-[120px] space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground font-medium">Filtered Total Fee Volume</span>
+                  <span className="font-bold text-slate-800">
+                    ₹{reportStudents.reduce((sum, s) => sum + (s.totalPayable || 0), 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-3 overflow-hidden border">
+                  <div 
+                    className="bg-green-500 h-full transition-all duration-500" 
+                    style={{ 
+                      width: `${reportStudents.reduce((sum, s) => sum + (s.totalPayable || 0), 0) > 0 
+                        ? Math.round((reportStudents.reduce((sum, s) => sum + (s.totalPaid || 0), 0) / 
+                            reportStudents.reduce((sum, s) => sum + (s.totalPayable || 0), 0)) * 100)
+                        : 0}%` 
+                    }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                  <span>Collected</span>
+                  <span>Balance Due</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border shadow-sm">
+            <CardHeader>
+              <CardTitle>Detailed List</CardTitle>
+              <CardDescription>Students matched by current class and section filter</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isReportsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : reportStudents.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground text-sm font-medium">
+                  No student fee records found matching these filters.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="font-semibold text-xs">Student Name</TableHead>
+                        <TableHead className="font-semibold text-xs">Admission No</TableHead>
+                        <TableHead className="font-semibold text-xs">Class & Sec</TableHead>
+                        <TableHead className="text-right font-semibold text-xs">Payable</TableHead>
+                        <TableHead className="text-right font-semibold text-xs text-blue-600">Paid</TableHead>
+                        <TableHead className="text-right font-semibold text-xs text-red-600">Pending</TableHead>
+                        <TableHead className="text-center font-semibold text-xs">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reportStudents.map((s: any) => (
+                        <TableRow key={s.id} className="hover:bg-muted/20 transition-colors">
+                          <TableCell className="font-medium text-sm">{s.name}</TableCell>
+                          <TableCell className="font-mono text-xs">{s.admissionNumber}</TableCell>
+                          <TableCell className="text-xs font-medium text-slate-600">
+                            {s.className} {s.sectionName !== 'N/A' && `(${s.sectionName})`}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-sm">₹{s.totalPayable.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-medium text-sm text-blue-600">₹{(s.totalPaid || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-bold text-sm text-red-600">₹{s.totalPending.toLocaleString()}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge className={`justify-center font-semibold text-xs py-0.5 px-2.5 ${getPaymentStatus(s.feeStatus)}`}>
+                              {s.feeStatus}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

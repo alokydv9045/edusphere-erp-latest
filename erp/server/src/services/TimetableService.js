@@ -104,31 +104,33 @@ class TimetableService {
                 const endTimeStr = this._addMinutes(currentTime, config.periodDuration);
                 
                 // 1. Check if we have hit the Lunch Break
-                const isLunchStart = this._timeToMinutes(currentTime) === this._timeToMinutes(config.lunchStartTime);
-                const overlapsLunch = this._isInside(currentTime, config.lunchStartTime, config.lunchDuration) || 
-                                     (this._timeToMinutes(startTimeStr) < this._timeToMinutes(config.lunchStartTime) && 
-                                      this._timeToMinutes(endTimeStr) > this._timeToMinutes(config.lunchStartTime));
+                if (config.lunchStartTime && config.lunchDuration) {
+                    const isLunchStart = this._timeToMinutes(currentTime) === this._timeToMinutes(config.lunchStartTime);
+                    const overlapsLunch = this._isInside(currentTime, config.lunchStartTime, config.lunchDuration) || 
+                                         (this._timeToMinutes(startTimeStr) < this._timeToMinutes(config.lunchStartTime) && 
+                                          this._timeToMinutes(endTimeStr) > this._timeToMinutes(config.lunchStartTime));
 
-                if (isLunchStart || overlapsLunch) {
-                    // Create Lunch Slot if not already passed
-                    if (this._timeToMinutes(currentTime) <= this._timeToMinutes(config.lunchStartTime)) {
-                        for (const section of sections) {
-                            slotsToCreate.push({
-                                timetableId: finalTimetableId,
-                                sectionId: section.id,
-                                dayOfWeek: day,
-                                startTime: config.lunchStartTime,
-                                endTime: this._addMinutes(config.lunchStartTime, config.lunchDuration),
-                                period: 0,
-                                isSpecialSlot: true,
-                                specialSlotName: 'Lunch Break',
-                                durationMinutes: config.lunchDuration
-                            });
+                    if (isLunchStart || overlapsLunch) {
+                        // Create Lunch Slot if not already passed
+                        if (this._timeToMinutes(currentTime) <= this._timeToMinutes(config.lunchStartTime)) {
+                            for (const section of sections) {
+                                slotsToCreate.push({
+                                    timetableId: finalTimetableId,
+                                    sectionId: section.id,
+                                    dayOfWeek: day,
+                                    startTime: config.lunchStartTime,
+                                    endTime: this._addMinutes(config.lunchStartTime, config.lunchDuration),
+                                    period: 0,
+                                    isSpecialSlot: true,
+                                    specialSlotName: 'Lunch Break',
+                                    durationMinutes: config.lunchDuration
+                                });
+                            }
                         }
+                        // Move time to after lunch and continue
+                        currentTime = this._addMinutes(config.lunchStartTime, config.lunchDuration);
+                        continue; 
                     }
-                    // Move time to after lunch and continue
-                    currentTime = this._addMinutes(config.lunchStartTime, config.lunchDuration);
-                    continue; 
                 }
 
                 // 2. Create Regular Period
@@ -224,6 +226,7 @@ class TimetableService {
 
     // Utils
     _timeToMinutes(time) {
+        if (!time || typeof time !== 'string' || !time.includes(':')) return 0;
         const [hh, mm] = time.split(':').map(Number);
         return hh * 60 + mm;
     }
@@ -235,10 +238,12 @@ class TimetableService {
     }
 
     _addMinutes(time, mins) {
-        return this._minutesToTime(this._timeToMinutes(time) + mins);
+        if (!time) return time;
+        return this._minutesToTime(this._timeToMinutes(time) + (mins || 0));
     }
 
     _isInside(time, start, duration) {
+        if (!time || !start || !duration) return false;
         const t = this._timeToMinutes(time);
         const s = this._timeToMinutes(start);
         const e = s + duration;

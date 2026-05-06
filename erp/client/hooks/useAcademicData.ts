@@ -21,7 +21,7 @@ export function useAcademicData(selectedClassId?: string) {
                 ]);
 
                 setClasses(classesRes.classes || []);
-                setAcademicYears(yearsRes.years || []);
+                setAcademicYears(yearsRes.academicYears || []);
             } catch (err: any) {
                 console.error("Failed to fetch initial academic data", err);
                 setError(err.message || "Failed to load academic data");

@@ -125,9 +125,9 @@ export default function PrepareScanPage() {
                             <QrCode className="mr-2 h-5 w-5" />
                             Start Scanning Mode
                         </Button>
-                        <p className="text-center text-xs text-muted-foreground mt-4">
+                        <div className="text-center text-xs text-muted-foreground mt-4">
                             All scans will be recorded as <Badge variant="outline" className="text-[10px] py-0">{action.toUpperCase()}</Badge> on {new Date(date).toLocaleDateString()}
-                        </p>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

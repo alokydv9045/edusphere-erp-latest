@@ -5,12 +5,18 @@ import { motion } from 'framer-motion';
 import { Sparkles, Calendar, Clock, MapPin } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 
-export const DashboardHeader: React.FC = () => {
+interface DashboardHeaderProps {
+    title: string;
+    subtitle: string;
+    today: string;
+    onRefresh: () => Promise<void> | void;
+}
+
+export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ title, subtitle, today, onRefresh }) => {
     const { user } = useAuth();
-    const today = new Date();
     
-    const timeOfDay = today.getHours() < 12 ? 'Morning' : today.getHours() < 17 ? 'Afternoon' : 'Evening';
-    const dateStr = today.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+    const timeOfDay = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
+    const dateStr = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
     return (
         <div className="relative mb-10">
@@ -32,7 +38,7 @@ export const DashboardHeader: React.FC = () => {
                         transition={{ delay: 0.1 }}
                         className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic"
                     >
-                        Good {timeOfDay}, <span className="text-primary">{user?.firstName || 'User'}</span>
+                        {title}
                     </motion.h1>
                     
                     <motion.p 
@@ -41,7 +47,7 @@ export const DashboardHeader: React.FC = () => {
                         transition={{ delay: 0.2 }}
                         className="text-slate-500 dark:text-slate-400 font-medium max-w-xl"
                     >
-                        Welcome back to the EduSphere core. All systems are operational and synchronized.
+                        {subtitle}
                     </motion.p>
                 </div>
 
@@ -66,7 +72,7 @@ export const DashboardHeader: React.FC = () => {
                             <Clock size={14} />
                         </div>
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
-                            SYSTEM TIME: {today.getHours().toString().padStart(2, '0')}:{today.getMinutes().toString().padStart(2, '0')}
+                            SYSTEM TIME: {new Date().getHours().toString().padStart(2, '0')}:{new Date().getMinutes().toString().padStart(2, '0')}
                         </span>
                     </div>
 

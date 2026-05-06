@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 interface PremiumSectionProps {
   title: string;
   subtitle?: string;
+  description?: string;
   icon?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -15,6 +16,7 @@ interface PremiumSectionProps {
 export function PremiumSection({
   title,
   subtitle,
+  description,
   icon,
   children,
   className,
@@ -40,9 +42,9 @@ export function PremiumSection({
               {title}
             </h2>
           </div>
-          {subtitle && (
+          {(subtitle || description) && (
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-              {subtitle}
+              {subtitle || description}
             </p>
           )}
         </div>

@@ -55,6 +55,7 @@ class FeeService {
             classId,
             sectionId,
             status, // PAID, PENDING, or OVERDUE
+            month,
             page = 1,
             limit = 10
         } = query;
@@ -86,15 +87,44 @@ class FeeService {
 
             if (student.feeLedgers && student.feeLedgers.length > 0) {
                 totalPayable = student.feeLedgers.reduce((sum, l) => sum + (l.totalPayable || 0), 0);
-                totalPaid = student.feeLedgers.reduce((sum, l) => sum + (l.totalPaid || 0), 0);
-                totalPending = student.feeLedgers.reduce((sum, l) => sum + (l.totalPending || 0), 0);
+
+                if (month && month !== 'all') {
+                    let monthPaid = 0;
+                    student.feeLedgers.forEach(l => {
+                        if (l.payments) {
+                            l.payments.forEach(p => {
+                                const paymentMonth = new Date(p.paymentDate).getMonth() + 1;
+                                if (paymentMonth === parseInt(month) && p.status === 'COMPLETED') {
+                                    monthPaid += p.amount;
+                                }
+                            });
+                        }
+                    });
+                    totalPaid = monthPaid;
+                    totalPending = student.feeLedgers.reduce((sum, l) => sum + (l.totalPending || 0), 0);
+                } else {
+                    totalPaid = student.feeLedgers.reduce((sum, l) => sum + (l.totalPaid || 0), 0);
+                    totalPending = student.feeLedgers.reduce((sum, l) => sum + (l.totalPending || 0), 0);
+                }
             }
 
             let computedStatus = 'PAID';
             if (totalPayable === 0) {
                 computedStatus = 'N/A';
             } else if (totalPending > 0) {
-                computedStatus = totalPaid > 0 ? 'PARTIAL' : 'PENDING';
+                // Bug #22 fix: Check if any ledger is actually overdue
+                const today = new Date();
+                const currentDay = today.getDate();
+                const isAnyOverdue = student.feeLedgers.some(l => {
+                    const dueDay = l.feeStructure?.dueDay || 10;
+                    return l.totalPending > 0 && currentDay > dueDay;
+                });
+                
+                if (isAnyOverdue) {
+                    computedStatus = 'OVERDUE';
+                } else {
+                    computedStatus = totalPaid > 0 ? 'PARTIAL' : 'PENDING';
+                }
             }
 
             return {

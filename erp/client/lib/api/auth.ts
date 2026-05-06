@@ -72,7 +72,13 @@ export const authAPI = {
   getCurrentUser: (): User | null => {
     if (typeof window === 'undefined') return null;
     const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+    try {
+      return JSON.parse(userStr);
+    } catch (e) {
+      localStorage.removeItem('user');
+      return null;
+    }
   },
 
   isAuthenticated: (): boolean => {

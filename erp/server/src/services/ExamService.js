@@ -339,10 +339,25 @@ class ExamService {
                 
                 const overallPct = totalMaxForCalc > 0 ? (totalObt / totalMaxForCalc) * 100 : 0;
                 
+                // Fetch all exam subjects to get their specific passMarks
+                const allExamSubjects = await tx.examSubject.findMany({
+                    where: { examId }
+                });
+                const subjectPassMap = new Map(allExamSubjects.map(es => [es.subjectId, es.passMarks]));
+                const subjectCodeToIdMap = new Map(allExamSubjects.map(es => [es.subjectId, es.subjectId])); // This needs subject code?
+                // Actually, let's use subjectCode since mark has subjectCode
+                const allSubjects = await tx.subject.findMany({
+                    where: { id: { in: allExamSubjects.map(es => es.subjectId) } }
+                });
+                const codeToPassMarks = new Map(allExamSubjects.map(es => {
+                    const s = allSubjects.find(sub => sub.id === es.subjectId);
+                    return [s.code, es.passMarks];
+                }));
+
                 const hasFailingSubject = allMarks.some(mk => {
                     if (mk.isAbsent) return mk.absenceType !== 'MEDICAL';
-                    const markPassMarks = mk.totalMarks * (passPct / 100);
-                    return mk.obtainedMarks < markPassMarks;
+                    const specificPassMarks = codeToPassMarks.get(mk.subjectCode) || (mk.totalMarks * (passPct / 100));
+                    return mk.obtainedMarks < specificPassMarks;
                 });
 
                 await tx.examResult.update({
@@ -413,9 +428,13 @@ class ExamService {
         });
 
         const sortedResults = [...results].sort((a, b) => b.percentage - a.percentage);
+        let currentRank = 1;
         sortedResults.forEach((r, idx) => {
+            if (idx > 0 && r.percentage < sortedResults[idx - 1].percentage) {
+                currentRank = idx + 1;
+            }
             const original = results.find(o => o.studentId === r.studentId);
-            if (original) original.rank = idx + 1;
+            if (original) original.rank = currentRank;
         });
 
         const subjectProgress = exam.examSubjects.map(es => {

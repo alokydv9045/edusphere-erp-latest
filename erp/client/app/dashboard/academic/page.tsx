@@ -202,7 +202,11 @@ export default function AcademicPage() {
       toast({ title: "Timetable Reset", description: "Baseline skeleton generated successfully." });
       fetchDynamicSchedule(selectedSectionForLogic);
     } catch (error: any) {
-      toast({ title: "Generation Failed", description: error?.response?.data?.error || "Failed to generate baseline.", variant: "destructive" });
+      const errMsg = error?.response?.data?.message ||
+        (typeof error?.response?.data?.error === 'string' ? error?.response?.data?.error : null) ||
+        error?.message ||
+        "Failed to generate baseline.";
+      toast({ title: "Generation Failed", description: errMsg, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

@@ -43,10 +43,10 @@ class HRService {
                 OR: [{ role: 'TEACHER' }, { roles: { has: 'TEACHER' } }],
             });
         } else if (type === 'STAFF') {
-            const staffRoles = ['LIBRARIAN', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'];
+            const staffRoles = ['LIBRARIAN', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'RECEPTIONIST', 'SECURITY', 'MAINTENANCE'];
             conditions.push({
                 AND: [
-                    { NOT: { AND: [{ role: 'TEACHER' }, { teacher: { isNot: null } }] } },
+                    { teacher: null },
                     {
                         OR: [
                             { role: { in: staffRoles } },
@@ -135,8 +135,8 @@ class HRService {
             assignedScannerId,
         } = data;
 
-        if (!firstName || !lastName || !email || !password) {
-            throw new AppError('firstName, lastName, email, and password are required', 400);
+        if (!firstName || !email || !password) {
+            throw new AppError('firstName, email, and password are required', 400);
         }
 
         const existing = await HRRepository.findUserByEmail(email);

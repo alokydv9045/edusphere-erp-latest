@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { StudentRegistrationValues } from "@/lib/validators/student";
 import { useAcademicData } from "@/hooks/useAcademicData";
@@ -36,6 +37,13 @@ export default function AcademicDetails({ form, onNext, onPrev }: AcademicDetail
         academicYears, 
         loading 
     } = useAcademicData(selectedClassId);
+    
+    // Reset sectionId when classId changes
+    useEffect(() => {
+        if (selectedClassId) {
+            form.setValue("sectionId", "");
+        }
+    }, [selectedClassId, form]);
 
     return (
         <Card>

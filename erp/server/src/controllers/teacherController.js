@@ -46,6 +46,7 @@ const getTeachers = asyncHandler(async (req, res) => {
             firstName: true,
             lastName: true,
             phone: true,
+            avatar: true,
           },
         },
         subjects: {

@@ -384,7 +384,7 @@ class TransportService {
 
         // --- Geofencing Engine ---
         const trip = await transportRepo.findTripById(tripId);
-        if (trip && trip.route?.stops) {
+        if (trip && trip.route?.stops && trip.route.stops.length > 0) {
             const settings = await this.getTransportSettings();
             
             // Calculate minimum distance to any stop in the route
@@ -393,34 +393,32 @@ class TransportService {
             );
             const minDistance = Math.min(...distances);
 
-        // Trigger deviation alert based on dynamic threshold (e.g., 2000m or custom)
-        const threshold = settings.geofenceThreshold || 2000;
-        if (minDistance > threshold) {
-            // --- Bug Fix: Alert De-duplication ---
-            // Check if an alert was already triggered for this trip in the last 15 minutes
-            const fifteenMinutesAgo = new Date(getSchoolDate().getTime() - 15 * 60 * 1000);
-            const redundantAlert = await prisma.transportAlert.findFirst({
-                where: {
-                    tripId,
-                    type: 'ROUTE_DEVIATION',
-                    createdAt: { gte: fifteenMinutesAgo }
-                }
-            });
-
-            if (!redundantAlert) {
-                await prisma.transportAlert.create({
-                    data: {
+            // Trigger deviation alert based on dynamic threshold
+            const threshold = settings.geofenceThreshold || 2000;
+            if (minDistance > threshold) {
+                const fifteenMinutesAgo = new Date(getSchoolDate().getTime() - 15 * 60 * 1000);
+                const redundantAlert = await prisma.transportAlert.findFirst({
+                    where: {
                         tripId,
-                        vehicleId: trip.vehicleId,
                         type: 'ROUTE_DEVIATION',
-                        severity: 'HIGH',
-                        message: `Vehicle ${trip.vehicle.name} deviated ${Math.round(minDistance)}m from defined route points. Threshold: ${threshold}m.`,
-                        latitude,
-                        longitude
+                        createdAt: { gte: fifteenMinutesAgo }
                     }
                 });
+
+                if (!redundantAlert) {
+                    await prisma.transportAlert.create({
+                        data: {
+                            tripId,
+                            vehicleId: trip.vehicleId,
+                            type: 'ROUTE_DEVIATION',
+                            severity: 'HIGH',
+                            message: `Vehicle ${trip.vehicle.name} deviated ${Math.round(minDistance)}m from defined route points. Threshold: ${threshold}m.`,
+                            latitude,
+                            longitude
+                        }
+                    });
+                }
             }
-        }
         }
 
         return log;
@@ -480,7 +478,6 @@ class TransportService {
             });
 
             if (!student || !student.transportAllocation) {
-                // If it's a parent, we might need a different lookup, but schema says they use student creds.
                 throw new NotFoundError('No transport allocation found for this user');
             }
 
@@ -505,17 +502,17 @@ class TransportService {
             include: {
                 managedVehicles: {
                     include: {
-                        trips: { orderBy: { createdAt: 'desc' }, take: 1 } // Fixed: Change 'order' to 'orderBy'
+                        trips: { orderBy: { createdAt: 'desc' }, take: 1 }
                     }
                 }
             }
         });
 
-        if (!staff || !staff.managedVehicles || staff.managedVehicles.length === 0) {
+        if (!staff || !staff.managedVehicles) {
             throw new NotFoundError('No vehicle assigned to this driver');
         }
 
-        const vehicle = staff.managedVehicles[0];
+        const vehicle = staff.managedVehicles;
         const lastTrip = await prisma.transportTrip.findFirst({
             where: { vehicleId: vehicle.id },
             orderBy: { createdAt: 'desc' },
@@ -550,12 +547,12 @@ class TransportService {
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-        // --- Housekeeping: Cleanup Stale Trips (>12 hours) ---
+        // --- Housekeeping: Cleanup Stale Trips (>12 hours) - Non-blocking ---
         const twelveHoursAgo = new Date(getSchoolDate().getTime() - 12 * 60 * 60 * 1000);
-        await prisma.transportTrip.updateMany({
+        prisma.transportTrip.updateMany({
             where: { status: 'IN_PROGRESS', actualStartTime: { lte: twelveHoursAgo } },
             data: { status: 'COMPLETED', actualEndTime: getSchoolDate() }
-        });
+        }).catch(err => logger.error('Stale trip cleanup failed', err));
 
         const [
             totalVehicles,

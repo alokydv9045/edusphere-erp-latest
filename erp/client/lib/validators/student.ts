@@ -3,7 +3,8 @@ import { z } from "zod";
 export const studentRegistrationSchema = z.object({
     // Basic Details
     firstName: z.string().min(2, "First name is required"),
-    lastName: z.string().min(2, "Last name is required"),
+    lastName: z.string().optional(),
+    email: z.string().email("Invalid email").optional().or(z.literal('')),
     dateOfBirth: z.string().refine((date) => new Date(date).toString() !== 'Invalid Date', {
         message: "Valid date of birth is required",
     }),

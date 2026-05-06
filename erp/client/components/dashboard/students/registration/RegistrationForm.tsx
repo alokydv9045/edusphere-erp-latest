@@ -33,6 +33,7 @@ export default function RegistrationForm() {
         defaultValues: {
             firstName: "",
             lastName: "",
+            email: "",
             dateOfBirth: "",
             gender: "MALE",
             nationality: "Indian",

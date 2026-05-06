@@ -108,19 +108,24 @@ class AttendanceRepository {
 
     async upsertAttendanceSlot(data) {
         const { date, attendeeType, classId, sectionId, subjectId } = data;
-        return prisma.attendanceSlot.upsert({
-            where: {
-                date_attendeeType_classId_sectionId_subjectId: {
+        
+        return prisma.$transaction(async (tx) => {
+            const existing = await tx.attendanceSlot.findFirst({
+                where: {
                     date,
                     attendeeType,
                     classId: classId || null,
                     sectionId: sectionId || null,
                     subjectId: subjectId || null
                 }
-            },
-            update: {}, // Do nothing if it exists
-            create: data,
-            include: { class: true, section: true, subject: true }
+            });
+
+            if (existing) return existing;
+
+            return tx.attendanceSlot.create({
+                data,
+                include: { class: true, section: true, subject: true }
+            });
         });
     }
 

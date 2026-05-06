@@ -8,15 +8,13 @@ const GoogleMapsContext = createContext<{ isLoaded: boolean }>({ isLoaded: false
 export const useGoogleMaps = () => useContext(GoogleMapsContext);
 
 export default function GoogleMapsProvider({ children }: { children: React.ReactNode }) {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-  useEffect(() => {
-    // Check if already loaded (e.g. from previous navigation)
+  const [isLoaded, setIsLoaded] = useState(() => {
     if (typeof window !== 'undefined' && (window as any).google?.maps) {
-      setIsLoaded(true);
+      return true;
     }
-  }, []);
+    return false;
+  });
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
     return <>{children}</>;

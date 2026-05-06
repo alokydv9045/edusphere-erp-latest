@@ -29,7 +29,7 @@ class PayrollRepository {
     async findActiveStructures() {
         return prisma.salaryStructure.findMany({
             include: {
-                employee: { select: { id: true, isActive: true, firstName: true, lastName: true, userId: true } },
+                employee: { select: { id: true, isActive: true, firstName: true, lastName: true } },
             },
             where: {
                 employee: { isActive: true }

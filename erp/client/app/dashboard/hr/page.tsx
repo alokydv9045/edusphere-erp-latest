@@ -298,9 +298,13 @@ export default function HRManagementPage() {
             toast({ title: 'Payroll Generated', description: data.message });
             fetchPayroll();
         } catch (err: any) {
+            const errMsg = err?.response?.data?.message ||
+                (typeof err?.response?.data?.error === 'string' ? err?.response?.data?.error : null) ||
+                err?.message ||
+                "Failed to generate payroll";
             toast({
                 title: 'Error',
-                description: err?.response?.data?.error || 'Failed to generate payroll',
+                description: errMsg,
                 variant: 'destructive',
             });
         } finally {

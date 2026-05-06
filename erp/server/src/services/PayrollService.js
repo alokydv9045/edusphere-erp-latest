@@ -99,7 +99,8 @@ class PayrollService {
                 // Check metadata for standardized leave codes or subject for UNPAID keyword
                 const leaveType = leave.metadata?.leaveType || '';
                 const isPaidType = ['CL', 'SL', 'EL', 'ML'].includes(leaveType);
-                const isExplicitlyUnpaid = leave.subject.toUpperCase().includes('UNPAID');
+                const subjectStr = leave.subject || '';
+                const isExplicitlyUnpaid = typeof subjectStr === 'string' && subjectStr.toUpperCase().includes('UNPAID');
 
                 if (isPaidType || !isExplicitlyUnpaid) {
                     paidLeaveDays += diff;

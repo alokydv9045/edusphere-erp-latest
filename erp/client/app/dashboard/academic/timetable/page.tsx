@@ -110,9 +110,13 @@ export default function TimetableManagementPage() {
             });
             fetchTimetable(selectedSectionId);
         } catch (error: any) {
+            const errMsg = error?.response?.data?.message ||
+                (typeof error?.response?.data?.error === 'string' ? error?.response?.data?.error : null) ||
+                error?.message ||
+                "Failed to generate baseline.";
             toast({
                 title: "Generation Failed",
-                description: error?.response?.data?.error || "Failed to generate baseline.",
+                description: errMsg,
                 variant: "destructive",
             });
         } finally {

@@ -42,19 +42,29 @@ class FeeRepository {
 
             const total = await prisma.student.count({ where });
 
-            // Fetch ledgers safely for each student sequentially to respect connection limits
-            const enrichedStudents = [];
-            for (const student of students) {
-                let feeLedgers = [];
-                try {
-                    feeLedgers = await prisma.studentFeeLedger.findMany({
-                        where: { studentId: student.id }
-                    });
-                } catch (err) {
-                    // Silently ignore if studentFeeLedger model doesn't exist yet
-                }
-                enrichedStudents.push({ ...student, feeLedgers });
+            const studentIds = students.map(s => s.id);
+            let allLedgers = [];
+            try {
+                allLedgers = await prisma.studentFeeLedger.findMany({
+                    where: { studentId: { in: studentIds } },
+                    include: { feeStructure: true, payments: true }
+                });
+            } catch (err) {
+                // Silently ignore if model doesn't exist
             }
+
+            const ledgersByStudent = {};
+            for (const ledger of allLedgers) {
+                if (!ledgersByStudent[ledger.studentId]) {
+                    ledgersByStudent[ledger.studentId] = [];
+                }
+                ledgersByStudent[ledger.studentId].push(ledger);
+            }
+
+            const enrichedStudents = students.map(student => ({
+                ...student,
+                feeLedgers: ledgersByStudent[student.id] || []
+            }));
 
             return [enrichedStudents, total];
         } catch (err) {

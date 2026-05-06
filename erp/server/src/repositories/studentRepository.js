@@ -17,6 +17,7 @@ class StudentRepository {
                         phone: true,
                         dateOfBirth: true,
                         gender: true,
+                        avatar: true,
                     },
                 },
                 currentClass: { select: { id: true, name: true } },

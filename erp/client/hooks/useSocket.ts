@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { SERVER_BASE_URL } from '@/lib/api/apiConfig';

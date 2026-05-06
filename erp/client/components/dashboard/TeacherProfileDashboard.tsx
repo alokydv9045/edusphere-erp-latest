@@ -208,9 +208,9 @@ export default function TeacherProfileDashboard({ user, staffData }: TeacherProf
         const base = new Date(date);
         if (status === 'ABSENT') return '—';
         
-        let hours = 8;
-        let mins = status === 'LATE' ? 45 + Math.floor(Math.random() * 20) : 15 + Math.floor(Math.random() * 15);
-        let secs = Math.floor(Math.random() * 59);
+        const hours = 8;
+        const mins = status === 'LATE' ? 45 + Math.floor(Math.random() * 20) : 15 + Math.floor(Math.random() * 15);
+        const secs = Math.floor(Math.random() * 59);
         
         return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} AM`;
     };
