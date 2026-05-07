@@ -5,9 +5,6 @@ const notifService = require('../notifications/notificationService');
 const notificationService = require('../services/NotificationService');
 const asyncHandler = require('../utils/asyncHandler');
 
-const NOTIF_ROLES = ['SUPER_ADMIN', 'ADMIN', 'NOTIFICATION_MANAGER'];
-const ADMIN_ONLY = ['SUPER_ADMIN', 'ADMIN'];
-
 // ─────────────────────────────────────────────────────────────
 // In-app notifications (header bell)
 // ─────────────────────────────────────────────────────────────
@@ -300,6 +297,4 @@ module.exports = {
   getLogs,
   getDashboard,
   retryFailed,
-  NOTIF_ROLES,
-  ADMIN_ONLY,
 };
