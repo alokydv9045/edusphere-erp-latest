@@ -7,7 +7,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { MobileSidebar } from '@/components/layout/mobile-sidebar';
 import { Header } from '@/components/layout/header';
 import { TopAnnouncementBar } from '@/components/layout/TopAnnouncementBar';
-import { Loader2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({
   children,
@@ -17,7 +17,6 @@ export default function DashboardLayout({
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -42,21 +41,11 @@ export default function DashboardLayout({
       <TopAnnouncementBar />
       <div className="flex flex-1 overflow-hidden relative">
         {/* Desktop sidebar with collapse support */}
-        <div className={`hidden lg:flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden' : ''}`}>
+        <div className="hidden lg:flex flex-col">
           <Sidebar className="flex transition-opacity duration-500 ease-in-out" />
         </div>
 
         {/* Sidebar toggle button — tabs on the edge of sidebar */}
-        <button
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="hidden lg:flex absolute z-30 top-4 items-center justify-center w-5 h-10 rounded-r-md bg-primary/10 hover:bg-primary/20 border border-l-0 border-border text-muted-foreground hover:text-primary transition-all"
-          style={{ left: sidebarCollapsed ? 0 : 'var(--sidebar-width, 220px)' }}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {sidebarCollapsed
-            ? <PanelLeftOpen className="h-3 w-3" />
-            : <PanelLeftClose className="h-3 w-3" />}
-        </button>
         <MobileSidebar open={isMobileMenuOpen} setOpen={setIsMobileMenuOpen} />
 
         <div className="flex flex-1 flex-col overflow-hidden w-full max-w-full">

@@ -3,11 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
-import { Send, RefreshCw } from 'lucide-react';
+import { Send, RefreshCw, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : ''; }
+import apiClient from '@/lib/api/client';
 
 const TARGETS = [
   { value: 'ALL_STUDENTS', label: 'All Students (all parent phones)' },
@@ -38,22 +37,22 @@ export default function BulkSendPage() {
 
   // Load classes on mount
   useEffect(() => {
-    fetch(`${API}/academic/classes`, { headers: { Authorization: `Bearer ${getToken()}` } })
-      .then(r => r.json()).then(d => setClasses(d.classes || [])).catch(() => {});
+    apiClient.get('/academic/classes')
+      .then(res => setClasses(res.data.classes || res.data || [])).catch(() => {});
   }, []);
 
   // Load sections when class changes
   useEffect(() => {
     if (!form.classId) { setSections([]); return; }
-    fetch(`${API}/academic/sections?classId=${form.classId}`, { headers: { Authorization: `Bearer ${getToken()}` } })
-      .then(r => r.json()).then(d => setSections(d.sections || [])).catch(() => {});
+    apiClient.get(`/academic/sections?classId=${form.classId}`)
+      .then(res => setSections(res.data.sections || res.data || [])).catch(() => {});
   }, [form.classId]);
 
   // Load students for INDIVIDUAL target
   useEffect(() => {
     if (form.target !== 'INDIVIDUAL') { setStudents([]); return; }
-    fetch(`${API}/students?limit=200`, { headers: { Authorization: `Bearer ${getToken()}` } })
-      .then(r => r.json()).then(d => setStudents(d.students || [])).catch(() => {});
+    apiClient.get('/students?limit=200')
+      .then(res => setStudents(res.data.students || res.data || [])).catch(() => {});
   }, [form.target]);
 
   const send = async () => {
@@ -66,30 +65,30 @@ export default function BulkSendPage() {
       if (form.target === 'SECTION' && form.sectionId) body.sectionId = form.sectionId;
       if (form.target === 'INDIVIDUAL' && form.studentId) body.studentId = form.studentId;
 
-      const res = await fetch(`${API}/notifications/bulk-send`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { data } = await apiClient.post('/notifications/bulk-send', body);
+      toast.success('Messages Queued', {
+        description: data.message || `Messages queued for ${form.target.replace('_', ' ').toLowerCase()}.`,
+        duration: 4000,
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success('Messages Queued', {
-          description: data.message || `Messages queued for ${form.target.replace('_', ' ').toLowerCase()}.`,
-          duration: 4000,
-        });
-        setForm(f => ({ ...f, message: '', scheduledAt: '' }));
-      } else {
-        toast.error('Failed to send', {
-          description: data.message || 'An unexpected error occurred.',
-          duration: 4000,
-        });
-      }
-    } catch { toast.error('Network error', { description: 'Could not reach the server.', duration: 4000 }); }
-    finally { setSending(false); }
+      setForm(f => ({ ...f, message: '', scheduledAt: '' }));
+    } catch (err: any) {
+      toast.error('Failed to send', {
+        description: err.response?.data?.message || 'An unexpected error occurred.',
+        duration: 4000,
+      });
+    } finally { setSending(false); }
   };
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="max-w-xl space-y-4">
+      <button
+        onClick={() => router.push('/dashboard/notifications')}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+
       <h1 className="text-xl font-bold flex items-center gap-2"><Send className="h-5 w-5 text-primary" />Bulk Messaging</h1>
 
       <div className="rounded-lg border bg-card p-5 space-y-4">

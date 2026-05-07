@@ -146,4 +146,9 @@ export const dashboardAPI = {
     const { data } = await apiClient.get('/dashboard/inventory-stats');
     return data;
   },
+
+  getNotificationStats: async (): Promise<any> => {
+    const { data } = await apiClient.get('/notifications/dashboard');
+    return data;
+  },
 };

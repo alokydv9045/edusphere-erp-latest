@@ -46,7 +46,6 @@ async function startQueueWorker() {
     return;
   }
 
-<<<<<<< HEAD
   const redisUrl = REDIS_URL;
 
   // Pre-flight check: Test if Redis is up without crashing the app
@@ -74,12 +73,7 @@ async function startQueueWorker() {
   try {
     const connection = {
       url: redisUrl,
-=======
-  try {
-    const connection = {
-      url: REDIS_URL,
       // BullMQ retries aggressively by default — limit it so we don't flood logs
->>>>>>> 28b83213e05e6134e5d3b6ac44ce6da13e42ae52
       maxRetriesPerRequest: null,
     };
 

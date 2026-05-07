@@ -6,8 +6,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { FileText, Plus, Pencil, Trash2, RefreshCw, X, Save, ArrowLeft, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : ''; }
+import apiClient from '@/lib/api/client';
 
 const TEMPLATE_TYPES = ['ATTENDANCE','HOMEWORK','FEE_REMINDER','ANNOUNCEMENT','CUSTOM'];
 const VARIABLE_HINTS = ['{student_name}','{class}','{section}','{status}','{date}','{amount}','{due_date}'];
@@ -40,9 +39,10 @@ export default function TemplatesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/notifications/templates`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      const data = await res.json();
+      const { data } = await apiClient.get('/notifications/templates');
       setTemplates(data.templates || []);
+    } catch (err: any) {
+      console.error('Failed to load templates:', err);
     } finally { setLoading(false); }
   }, []);
 
@@ -61,31 +61,32 @@ export default function TemplatesPage() {
     }
     setSaving(true);
     try {
-      const url    = modal?.mode === 'edit' ? `${API}/notifications/templates/${modal.item!.id}` : `${API}/notifications/templates`;
-      const method = modal?.mode === 'edit' ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const url    = modal?.mode === 'edit' ? `/notifications/templates/${modal.item!.id}` : '/notifications/templates';
+      const method = modal?.mode === 'edit' ? 'put' : 'post';
+      
+      const { data } = await apiClient({
+        url,
         method,
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        data: form,
       });
-      if (res.ok) {
-        toast.success(modal?.mode === 'edit' ? 'Template updated!' : 'Template created!');
-        setModal(null);
-        load();
-      } else {
-        const d = await res.json();
-        toast.error(d.message || 'Failed to save template.');
-      }
+
+      toast.success(modal?.mode === 'edit' ? 'Template updated!' : 'Template created!');
+      setModal(null);
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save template.');
     } finally { setSaving(false); }
   };
 
   const deleteTemplate = async (id: string) => {
     if (!confirm('Delete this template? This cannot be undone.')) return;
-    const res = await fetch(`${API}/notifications/templates/${id}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    if (res.ok) { toast.success('Template deleted.'); load(); }
-    else toast.error('Failed to delete template.');
+    try {
+      await apiClient.delete(`/notifications/templates/${id}`);
+      toast.success('Template deleted.');
+      load();
+    } catch (err: any) {
+      toast.error('Failed to delete template.');
+    }
   };
 
   const insertVar = (v: string) => setForm(f => ({ ...f, messageBody: f.messageBody + v }));

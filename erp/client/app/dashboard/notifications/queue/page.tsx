@@ -3,10 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
-import { Clock, RefreshCw, RotateCcw } from 'lucide-react';
+import { Clock, RefreshCw, RotateCcw, ArrowLeft } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : ''; }
+import apiClient from '@/lib/api/client';
 
 const STATUS_BADGE: Record<string, string> = {
   PENDING:    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
@@ -39,12 +38,13 @@ export default function QueuePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (status) params.set('status', status);
-      const res = await fetch(`${API}/notifications/queue?${params}`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      const data = await res.json();
+      const params: any = { page: String(page), limit: '20' };
+      if (status) params.status = status;
+      const { data } = await apiClient.get('/notifications/queue', { params });
       setItems(data.queue || []);
       setTotal(data.pagination?.total || 0);
+    } catch (err: any) {
+      console.error('Failed to load queue:', err);
     } finally { setLoading(false); }
   }, [page, status]);
 
@@ -52,13 +52,26 @@ export default function QueuePage() {
 
   const retryFailed = async () => {
     setRetrying(true);
-    await fetch(`${API}/notifications/retry`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
-    setRetrying(false);
-    load();
+    try {
+      await apiClient.post('/notifications/retry');
+      load();
+    } catch (err: any) {
+      console.error('Failed to retry failed notifications:', err);
+    } finally {
+      setRetrying(false);
+    }
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      <button
+        onClick={() => router.push('/dashboard/notifications')}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />Message Queue <span className="text-sm font-normal text-muted-foreground">({total})</span></h1>
         <div className="flex items-center gap-2">

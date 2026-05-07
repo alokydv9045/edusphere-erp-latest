@@ -518,9 +518,7 @@ class DashboardRepository {
         return prisma.student.count({
             where: {
                 status: 'ACTIVE',
-                transportAllocations: {
-                    none: { status: 'ACTIVE' }
-                }
+                transportAllocation: null
             }
         });
     }
@@ -528,8 +526,7 @@ class DashboardRepository {
     async countActiveRoutes() {
         return prisma.transportRoute.count({
             where: {
-                isActive: true,
-                vehicles: { some: {} }
+                allocations: { some: { status: 'ACTIVE' } }
             }
         });
     }

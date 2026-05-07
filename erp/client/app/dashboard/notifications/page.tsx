@@ -19,19 +19,11 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
-
-function getToken(): string {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem('auth_token') || '';
-}
+import apiClient from '@/lib/api/client';
 
 async function fetchDashboard() {
-  const res = await fetch(`${API}/notifications/dashboard`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch notification dashboard');
-  return res.json();
+  const { data } = await apiClient.get('/notifications/dashboard');
+  return data;
 }
 
 interface Stats {
