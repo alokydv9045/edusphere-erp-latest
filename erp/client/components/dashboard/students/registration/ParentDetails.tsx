@@ -15,11 +15,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ParentDetailsProps {
     form: UseFormReturn<StudentRegistrationValues>;
-    onNext: () => void;
-    onPrev: () => void;
 }
 
-export default function ParentDetails({ form, onNext, onPrev }: ParentDetailsProps) {
+export default function ParentDetails({ form }: ParentDetailsProps) {
     return (
         <div className="space-y-6">
             {/* Father's Details */}
@@ -174,10 +172,6 @@ export default function ParentDetails({ form, onNext, onPrev }: ParentDetailsPro
                 </CardContent>
             </Card>
 
-            <div className="flex justify-between">
-                <Button type="button" variant="outline" onClick={onPrev}>Previous</Button>
-                <Button type="button" onClick={onNext}>Next: Address Details</Button>
-            </div>
         </div>
     );
 }

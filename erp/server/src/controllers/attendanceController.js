@@ -28,7 +28,15 @@ const markAttendance = asyncHandler(async (req, res) => {
 
 // Get attendance for a date
 const getAttendanceByDate = asyncHandler(async (req, res) => {
-  const result = await AttendanceService.getAttendanceByDate(req.query);
+  const query = { ...req.query };
+  if (req.user.role === 'TEACHER') {
+    if (query.attendeeType && query.attendeeType !== 'STUDENT') {
+      return res.status(403).json({ success: false, error: 'Teachers can only view STUDENT attendance' });
+    }
+    query.attendeeType = 'STUDENT';
+  }
+
+  const result = await AttendanceService.getAttendanceByDate(query);
   res.status(200).json({
     success: true,
     ...result
@@ -85,6 +93,13 @@ const getAttendanceReport = asyncHandler(async (req, res) => {
 
 // Create a daily attendance slot for a class
 const createSlot = asyncHandler(async (req, res) => {
+  if (req.user.role === 'TEACHER') {
+    if (req.body.attendeeType && req.body.attendeeType !== 'STUDENT') {
+      return res.status(403).json({ success: false, error: 'Teachers can only create STUDENT slots' });
+    }
+    req.body.attendeeType = 'STUDENT';
+  }
+
   const result = await AttendanceService.createSlot(req.body, req.user.userId);
   res.status(201).json({
     success: true,
@@ -95,7 +110,15 @@ const createSlot = asyncHandler(async (req, res) => {
 
 // List attendance slots
 const getSlots = asyncHandler(async (req, res) => {
-  const slots = await AttendanceService.getSlots(req.query);
+  const query = { ...req.query };
+  if (req.user.role === 'TEACHER') {
+    if (query.attendeeType && query.attendeeType !== 'STUDENT') {
+      return res.status(403).json({ success: false, error: 'Teachers can only view STUDENT slots' });
+    }
+    query.attendeeType = 'STUDENT';
+  }
+
+  const slots = await AttendanceService.getSlots(query);
   res.status(200).json({
     success: true,
     slots

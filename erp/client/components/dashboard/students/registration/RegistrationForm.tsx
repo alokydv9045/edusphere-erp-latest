@@ -10,8 +10,7 @@ import { useEffect } from "react";
 import { studentRegistrationSchema, StudentRegistrationValues } from "@/lib/validators/student";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
 // Sub-components will be imported here (creating placeholders for now)
@@ -129,61 +128,62 @@ export default function RegistrationForm() {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-7">
-                        <TabsTrigger value="basic">Basic Info</TabsTrigger>
-                        <TabsTrigger value="academic">Academic</TabsTrigger>
-                        <TabsTrigger value="parents">Parents</TabsTrigger>
-                        <TabsTrigger value="address">Address</TabsTrigger>
-                        <TabsTrigger value="previous">Previous School</TabsTrigger>
-                        <TabsTrigger value="fees">Fees</TabsTrigger>
-                        <TabsTrigger value="confirm">Confirm</TabsTrigger>
-                    </TabsList>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-6 items-start relative">
+                {/* Navigation Sidebar */}
+                <div className="w-64 shrink-0 hidden lg:block sticky top-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Sections</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex flex-col space-y-2">
+                            <Button type="button" variant="ghost" className="justify-start" onClick={() => document.getElementById("basic")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Basic Info</Button>
+                            <Button type="button" variant="ghost" className="justify-start" onClick={() => document.getElementById("academic")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Academic Details</Button>
+                            <Button type="button" variant="ghost" className="justify-start" onClick={() => document.getElementById("parents")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Parent Details</Button>
+                            <Button type="button" variant="ghost" className="justify-start" onClick={() => document.getElementById("address")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Address</Button>
+                            <Button type="button" variant="ghost" className="justify-start" onClick={() => document.getElementById("previous")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Previous School</Button>
+                            <Button type="button" variant="ghost" className="justify-start" onClick={() => document.getElementById("fees")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Fee Details</Button>
+                        </CardContent>
+                    </Card>
+                </div>
 
-                    <div className="mt-4">
-                        <TabsContent value="basic">
-                            <BasicDetails form={form} onNext={() => handleNext("basic", "academic", ["firstName", "lastName", "dateOfBirth", "gender"])} />
-                        </TabsContent>
-
-                        <TabsContent value="academic">
-                            <AcademicDetails form={form} onNext={() => handleNext("academic", "parents", ["classId", "sectionId", "academicYearId"])} onPrev={() => setActiveTab("basic")} />
-                        </TabsContent>
-
-                        <TabsContent value="parents">
-                            <ParentDetails form={form} onNext={() => handleNext("parents", "address", ["fatherName", "fatherPhone"])} onPrev={() => setActiveTab("academic")} />
-                        </TabsContent>
-
-                        <TabsContent value="address">
-                            <AddressDetails form={form} onNext={() => handleNext("address", "previous", ["currentAddress", "city", "state", "pincode"])} onPrev={() => setActiveTab("parents")} />
-                        </TabsContent>
-
-                        <TabsContent value="previous">
-                            <PreviousSchoolDetails form={form} />
-                            <div className="flex justify-between mt-4">
-                                <Button type="button" variant="outline" onClick={() => setActiveTab("address")}>Previous</Button>
-                                <Button type="button" onClick={() => setActiveTab("fees")}>Next: Fee Details</Button>
-                            </div>
-                        </TabsContent>
-
-                        <TabsContent value="fees">
-                            <FeeDetails form={form} onNext={() => setActiveTab("confirm")} onPrev={() => setActiveTab("previous")} />
-                        </TabsContent>
-
-                        <TabsContent value="confirm">
-                            <div className="space-y-4">
-                                <RegistrationSummary form={form} />
-                                <div className="flex justify-end space-x-2">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab("fees")}>Back</Button>
-                                    <Button type="submit" disabled={isSubmitting}>
-                                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Register Student
-                                    </Button>
-                                </div>
-                            </div>
-                        </TabsContent>
+                {/* Main Form Area */}
+                <div className="flex-1 space-y-8 pb-12">
+                    <div id="basic" className="scroll-mt-6">
+                        <BasicDetails form={form} />
                     </div>
-                </Tabs>
+                    
+                    <div id="academic" className="scroll-mt-6">
+                        <AcademicDetails form={form} />
+                    </div>
+                    
+                    <div id="parents" className="scroll-mt-6">
+                        <ParentDetails form={form} />
+                    </div>
+                    
+                    <div id="address" className="scroll-mt-6">
+                        <AddressDetails form={form} />
+                    </div>
+                    
+                    <div id="previous" className="scroll-mt-6">
+                        <PreviousSchoolDetails form={form} />
+                    </div>
+                    
+                    <div id="fees" className="scroll-mt-6">
+                        <FeeDetails form={form} />
+                    </div>
+                    
+                    <Card className="bg-primary/5 border-primary/20">
+                        <CardContent className="p-6">
+                            <RegistrationSummary form={form} />
+                            <div className="flex justify-end mt-6">
+                                <Button type="submit" size="lg" disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Submit Registration
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </form>
         </Form>
     );

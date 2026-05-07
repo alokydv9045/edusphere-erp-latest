@@ -18,11 +18,9 @@ import { Textarea } from "@/components/ui/textarea";
 
 interface AddressDetailsProps {
     form: UseFormReturn<StudentRegistrationValues>;
-    onNext: () => void;
-    onPrev: () => void;
 }
 
-export default function AddressDetails({ form, onNext, onPrev }: AddressDetailsProps) {
+export default function AddressDetails({ form }: AddressDetailsProps) {
     const [isGeocoding, setIsGeocoding] = useState(false);
 
     const handleGeocode = async () => {
@@ -192,10 +190,6 @@ export default function AddressDetails({ form, onNext, onPrev }: AddressDetailsP
                 </div>
 
 
-                <div className="flex justify-between pt-4">
-                    <Button type="button" variant="outline" onClick={onPrev}>Previous</Button>
-                    <Button type="button" onClick={onNext}>Review & Submit</Button>
-                </div>
             </CardContent>
         </Card>
     );

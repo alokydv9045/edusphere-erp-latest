@@ -69,7 +69,7 @@ export default function FeesPage() {
     sectionId: 'all',
     month: 'all',
   });
-  const [reportStudents, setReportStudents] = useState<any[]>([]);
+  const [classReports, setClassReports] = useState<any[]>([]);
   const [isReportsLoading, setIsReportsLoading] = useState(false);
 
   const fetchReportData = useCallback(async () => {
@@ -80,8 +80,8 @@ export default function FeesPage() {
       if (reportFilters.sectionId !== 'all') params.sectionId = reportFilters.sectionId;
       if (reportFilters.month !== 'all') params.month = reportFilters.month;
 
-      const res = await feeAPI.getFeeStudents(params);
-      setReportStudents(res.students || []);
+      const res = await feeAPI.getClassWiseReport(params);
+      setClassReports(res.report || []);
     } catch (err) {
       console.error('Failed to fetch report data', err);
       toast.error('Failed to load report data');
@@ -1216,21 +1216,19 @@ export default function FeesPage() {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      if (!reportStudents || reportStudents.length === 0) {
+                      if (!classReports || classReports.length === 0) {
                         toast.error('No data available to export');
                         return;
                       }
 
-                      const headers = ['Student Name', 'Admission No', 'Class', 'Section', 'Payable Amount', 'Amount Paid', 'Balance Due', 'Status'];
-                      const rows = reportStudents.map(s => [
-                        `"${s.name}"`,
-                        `"${s.admissionNumber}"`,
-                        `"${s.className}"`,
-                        `"${s.sectionName}"`,
-                        s.totalPayable,
-                        s.totalPaid,
-                        s.totalPending,
-                        `"${s.feeStatus}"`
+                      const headers = ['Class Name', 'Total Students', 'Paid Students', 'Pending Students', 'Total Collection', 'Balance Due'];
+                      const rows = classReports.map(c => [
+                        `"${c.className}"`,
+                        c.totalStudents,
+                        c.paidStudentsCount,
+                        c.pendingStudentsCount,
+                        c.totalCollection,
+                        c.totalPending
                       ]);
 
                       const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -1238,7 +1236,7 @@ export default function FeesPage() {
                       const url = URL.createObjectURL(blob);
                       const link = document.createElement('a');
                       link.setAttribute('href', url);
-                      link.setAttribute('download', `Fee_Report_Class_${reportFilters.classId}_Sec_${reportFilters.sectionId}.csv`);
+                      link.setAttribute('download', `Class_Wise_Fee_Report.csv`);
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
@@ -1260,7 +1258,7 @@ export default function FeesPage() {
                 <div className="text-center">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Filtered Total Collection</p>
                   <p className="text-3xl font-bold text-green-600 mt-1">
-                    ₹{reportStudents.reduce((sum, s) => sum + (s.totalPaid || 0), 0).toLocaleString()}
+                    ₹{classReports.reduce((sum, c) => sum + (c.totalCollection || 0), 0).toLocaleString()}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">Amount collected</p>
                 </div>
@@ -1271,7 +1269,7 @@ export default function FeesPage() {
                 <div className="text-center">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Filtered Total Pending</p>
                   <p className="text-3xl font-bold text-red-600 mt-1">
-                    ₹{reportStudents.reduce((sum, s) => sum + (s.totalPending || 0), 0).toLocaleString()}
+                    ₹{classReports.reduce((sum, c) => sum + (c.totalPending || 0), 0).toLocaleString()}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">Amount due</p>
                 </div>
@@ -1280,70 +1278,11 @@ export default function FeesPage() {
             <Card className="border shadow-sm">
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Submission Rate</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Students</p>
                   <p className="text-3xl font-bold text-blue-600 mt-1">
-                    {reportStudents.length > 0 
-                      ? Math.round((reportStudents.filter(s => s.feeStatus === 'PAID').length / reportStudents.length) * 100)
-                      : 0}%
+                    {classReports.reduce((sum, c) => sum + (c.totalStudents || 0), 0)}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">Of filtered students</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="border shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Student Counts</CardTitle>
-                <CardDescription>Breakdown of students with dues vs settled</CardDescription>
-              </CardHeader>
-              <CardContent className="flex justify-around items-center h-[120px]">
-                <div className="text-center">
-                  <p className="text-4xl font-extrabold text-slate-800">{reportStudents.length}</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mt-1">Total Students</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-4xl font-extrabold text-emerald-600">
-                    {reportStudents.filter(s => s.feeStatus === 'PAID').length}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mt-1">Paid Fully</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-4xl font-extrabold text-red-600">
-                    {reportStudents.filter(s => s.totalPending > 0).length}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mt-1">Has Dues</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Overall Stats</CardTitle>
-                <CardDescription>Total outstanding vs collected for the current filters</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col justify-center h-[120px] space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground font-medium">Filtered Total Fee Volume</span>
-                  <span className="font-bold text-slate-800">
-                    ₹{reportStudents.reduce((sum, s) => sum + (s.totalPayable || 0), 0).toLocaleString()}
-                  </span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-3 overflow-hidden border">
-                  <div 
-                    className="bg-green-500 h-full transition-all duration-500" 
-                    style={{ 
-                      width: `${reportStudents.reduce((sum, s) => sum + (s.totalPayable || 0), 0) > 0 
-                        ? Math.round((reportStudents.reduce((sum, s) => sum + (s.totalPaid || 0), 0) / 
-                            reportStudents.reduce((sum, s) => sum + (s.totalPayable || 0), 0)) * 100)
-                        : 0}%` 
-                    }}
-                  ></div>
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                  <span>Collected</span>
-                  <span>Balance Due</span>
+                  <p className="mt-1 text-xs text-muted-foreground">In selected classes</p>
                 </div>
               </CardContent>
             </Card>
@@ -1351,48 +1290,44 @@ export default function FeesPage() {
 
           <Card className="border shadow-sm">
             <CardHeader>
-              <CardTitle>Detailed List</CardTitle>
-              <CardDescription>Students matched by current class and section filter</CardDescription>
+              <CardTitle>Class-wise Report</CardTitle>
+              <CardDescription>Collection statistics aggregated by class</CardDescription>
             </CardHeader>
             <CardContent>
               {isReportsLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : reportStudents.length === 0 ? (
+              ) : classReports.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground text-sm font-medium">
-                  No student fee records found matching these filters.
+                  No fee records found matching these filters.
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30">
-                        <TableHead className="font-semibold text-xs">Student Name</TableHead>
-                        <TableHead className="font-semibold text-xs">Admission No</TableHead>
-                        <TableHead className="font-semibold text-xs">Class & Sec</TableHead>
-                        <TableHead className="text-right font-semibold text-xs">Payable</TableHead>
-                        <TableHead className="text-right font-semibold text-xs text-blue-600">Paid</TableHead>
-                        <TableHead className="text-right font-semibold text-xs text-red-600">Pending</TableHead>
-                        <TableHead className="text-center font-semibold text-xs">Status</TableHead>
+                        <TableHead className="font-semibold text-xs">Class</TableHead>
+                        <TableHead className="font-semibold text-xs text-center">Total Students</TableHead>
+                        <TableHead className="text-center font-semibold text-xs text-green-600">Paid Fully</TableHead>
+                        <TableHead className="text-center font-semibold text-xs text-red-600">Pending</TableHead>
+                        <TableHead className="text-right font-semibold text-xs text-green-600">Collection (₹)</TableHead>
+                        <TableHead className="text-right font-semibold text-xs text-red-600">Balance (₹)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {reportStudents.map((s: any) => (
-                        <TableRow key={s.id} className="hover:bg-muted/20 transition-colors">
-                          <TableCell className="font-medium text-sm">{s.name}</TableCell>
-                          <TableCell className="font-mono text-xs">{s.admissionNumber}</TableCell>
-                          <TableCell className="text-xs font-medium text-slate-600">
-                            {s.className} {s.sectionName !== 'N/A' && `(${s.sectionName})`}
+                      {classReports.map((c: any) => (
+                        <TableRow key={c.classId} className="hover:bg-muted/20 transition-colors">
+                          <TableCell className="font-medium text-sm">{c.className}</TableCell>
+                          <TableCell className="font-mono text-xs text-center">{c.totalStudents}</TableCell>
+                          <TableCell className="text-xs text-center font-medium text-green-600">
+                            {c.paidStudentsCount}
                           </TableCell>
-                          <TableCell className="text-right font-medium text-sm">₹{s.totalPayable.toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-medium text-sm text-blue-600">₹{(s.totalPaid || 0).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-bold text-sm text-red-600">₹{s.totalPending.toLocaleString()}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge className={`justify-center font-semibold text-xs py-0.5 px-2.5 ${getPaymentStatus(s.feeStatus)}`}>
-                              {s.feeStatus}
-                            </Badge>
+                          <TableCell className="text-xs text-center font-bold text-red-600">
+                            {c.pendingStudentsCount}
                           </TableCell>
+                          <TableCell className="text-right font-medium text-sm text-green-600">₹{(c.totalCollection || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-bold text-sm text-red-600">₹{(c.totalPending || 0).toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

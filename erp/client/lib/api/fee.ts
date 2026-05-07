@@ -75,4 +75,8 @@ export const feeAPI = {
     });
     return response.data;
   },
+  getClassWiseReport: async (params?: any) => {
+    const { data } = await apiClient.get('/fees/reports/class-wise', { params });
+    return data;
+  },
 };

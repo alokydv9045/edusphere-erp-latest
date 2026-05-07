@@ -1342,6 +1342,8 @@ enum UserRole {
   HOD
   STAFF
   NOTIFICATION_MANAGER
+  TRANSPORT_MANAGER
+  DRIVER
 }
 
 enum Gender {
@@ -1780,6 +1782,7 @@ enum NotifTemplateType {
   FEE_REMINDER
   ANNOUNCEMENT
   CUSTOM
+  TRANSPORT
 }
 
 enum QueueStatus {

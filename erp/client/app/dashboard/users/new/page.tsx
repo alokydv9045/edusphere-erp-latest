@@ -56,6 +56,12 @@ const ROLE_CONFIG = [
     description: 'Manage WhatsApp notifications, templates, bulk messaging, and delivery logs',
     color: 'bg-violet-100 text-violet-700 border-violet-200',
   },
+  {
+    value: 'TRANSPORT_MANAGER',
+    label: 'Transport Manager',
+    description: 'Manage transport vehicles, routes, drivers, and student assignments',
+    color: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  },
 ];
 
 export default function NewUserPage() {

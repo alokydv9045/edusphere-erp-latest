@@ -159,6 +159,15 @@ const getFeeStats = asyncHandler(async (req, res) => {
   });
 });
 
+// Get Class-wise Fee Report
+const getClassWiseReport = asyncHandler(async (req, res) => {
+  const result = await feeService.getClassWiseReport(req.query);
+  res.status(200).json({
+    success: true,
+    ...result
+  });
+});
+
 module.exports = {
   getFeeStructures,
   getFeeStructureById,
@@ -174,6 +183,7 @@ module.exports = {
   processRefund,
   getAdjustments,
   getFeeStats,
+  getClassWiseReport,
   downloadFeeStatement: asyncHandler(async (req, res) => {
     let { id } = req.params;
     

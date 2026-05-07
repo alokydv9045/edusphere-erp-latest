@@ -39,6 +39,11 @@ const ROLE_CONFIG = [
         label: 'HR Manager',
         description: 'Manage employees, salaries, and payroll processing',
     },
+    {
+        value: 'TRANSPORT_MANAGER',
+        label: 'Transport Manager',
+        description: 'Manage transport vehicles, routes, drivers, and student assignments',
+    },
 ];
 
 export default function EditUserPage() {

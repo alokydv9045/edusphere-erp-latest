@@ -495,6 +495,71 @@ class FeeService {
             defaulters,
         };
     }
+
+    /**
+     * Get class-wise fee report
+     */
+    async getClassWiseReport(query) {
+        const { academicYearId, classId, sectionId } = query;
+        
+        const where = { status: 'ACTIVE' };
+        if (classId) where.currentClassId = classId;
+        if (sectionId) where.sectionId = sectionId;
+        
+        const students = await prisma.student.findMany({
+            where,
+            include: {
+                currentClass: true,
+                section: true,
+                feeLedgers: {
+                    where: academicYearId ? { academicYearId } : {},
+                }
+            }
+        });
+
+        const classMap = {};
+
+        students.forEach(student => {
+            const classKey = student.currentClass?.id;
+            if (!classKey) return;
+
+            if (!classMap[classKey]) {
+                classMap[classKey] = {
+                    classId: classKey,
+                    className: student.currentClass.name,
+                    totalStudents: 0,
+                    totalCollection: 0,
+                    totalPending: 0,
+                    paidStudentsCount: 0,
+                    pendingStudentsCount: 0,
+                };
+            }
+
+            const c = classMap[classKey];
+            c.totalStudents++;
+
+            let studentPaid = 0;
+            let studentPending = 0;
+
+            student.feeLedgers.forEach(l => {
+                studentPaid += (l.totalPaid || 0);
+                studentPending += (l.totalPending || 0);
+            });
+
+            c.totalCollection += studentPaid;
+            c.totalPending += studentPending;
+
+            if (studentPending === 0 && studentPaid > 0) {
+                 c.paidStudentsCount++;
+            } else if (studentPending > 0) {
+                 c.pendingStudentsCount++;
+            }
+        });
+
+        return {
+             report: Object.values(classMap)
+        };
+    }
 }
 
 module.exports = new FeeService();

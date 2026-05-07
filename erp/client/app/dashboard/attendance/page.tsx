@@ -48,7 +48,7 @@ function statusLabel(status: string | undefined) {
 }
 
 export default function AttendancePage() {
-  const { canMarkAttendance } = usePermissions();
+  const { canMarkAttendance, isAdmin, isHRManager } = usePermissions();
 
 
   // ── Filters ────────────────────────────────────────────────────────────
@@ -163,11 +163,11 @@ export default function AttendancePage() {
       const data = await attendanceAPI.getAnalytics(params);
       setAnalyticsData(data);
     } catch {
-      toast({ title: 'Error', description: 'Failed to load analytics', variant: 'destructive' });
+      toast.error('Failed to load analytics');
     } finally {
       setIsAnalyticsLoading(false);
     }
-  }, [analyticsClass, analyticsSection, analyticsStart, analyticsEnd, toast]);
+  }, [analyticsClass, analyticsSection, analyticsStart, analyticsEnd]);
 
   const openOverviewDetail = async (slot: any) => {
     setOverviewDetailSlot(slot);
@@ -368,10 +368,15 @@ export default function AttendancePage() {
                       setStudents([]);
                     }}
                     className={selectClass}
+                    disabled={!isAdmin && !isHRManager}
                   >
                     <option value="STUDENT">Students</option>
-                    <option value="TEACHER">Teachers</option>
-                    <option value="STAFF">Staff</option>
+                    {(isAdmin || isHRManager) && (
+                      <>
+                        <option value="TEACHER">Teachers</option>
+                        <option value="STAFF">Staff</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 {attendeeType === 'STUDENT' ? (

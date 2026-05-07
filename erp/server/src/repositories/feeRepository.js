@@ -188,8 +188,38 @@ class FeeRepository {
      * Delete fee structure
      */
     async deleteFeeStructure(id) {
-        return prisma.feeStructure.delete({
-            where: { id },
+        return prisma.$transaction(async (tx) => {
+            // 1. Delete associated payments
+            await tx.feePayment.deleteMany({
+                where: { feeStructureId: id }
+            });
+
+            // 2. Delete associated ledgers
+            // (FeeAdjustments will cascade automatically from ledger via DB constraint if set,
+            // but just to be safe if DB level cascade isn't applied, we can delete them too)
+            const ledgers = await tx.studentFeeLedger.findMany({
+                where: { feeStructureId: id },
+                select: { id: true }
+            });
+            const ledgerIds = ledgers.map(l => l.id);
+            if (ledgerIds.length > 0) {
+                await tx.feeAdjustment.deleteMany({
+                    where: { ledgerId: { in: ledgerIds } }
+                });
+                await tx.studentFeeLedger.deleteMany({
+                    where: { feeStructureId: id }
+                });
+            }
+
+            // 3. Delete fee structure items (explicitly to be safe)
+            await tx.feeStructureItem.deleteMany({
+                where: { feeStructureId: id }
+            });
+
+            // 4. Finally delete the fee structure
+            return tx.feeStructure.delete({
+                where: { id },
+            });
         });
     }
 

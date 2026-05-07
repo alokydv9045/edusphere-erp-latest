@@ -1,39 +1,67 @@
 import apiClient from './client';
 
 export const transportAPI = {
-  // --- Vehicles ---
-  getVehicles: (params?: any) => apiClient.get('/transport/vehicles', { params }),
-  getVehicleById: (id: string) => apiClient.get(`/transport/vehicles/${id}`),
-  createVehicle: (data: any) => apiClient.post('/transport/vehicles', data),
-  updateVehicle: (id: string, data: any) => apiClient.put(`/transport/vehicles/${id}`, data),
+  // VEHICLES
+  getVehicles: async (params?: any) => {
+    const { data } = await apiClient.get('/transport/vehicles', { params });
+    return data;
+  },
+  createVehicle: async (vehicleData: any) => {
+    const { data } = await apiClient.post('/transport/vehicles', vehicleData);
+    return data;
+  },
+  updateVehicle: async (id: string, vehicleData: any) => {
+    const { data } = await apiClient.put(`/transport/vehicles/${id}`, vehicleData);
+    return data;
+  },
+  deleteVehicle: async (id: string) => {
+    const { data } = await apiClient.delete(`/transport/vehicles/${id}`);
+    return data;
+  },
 
-  // --- Routes ---
-  getRoutes: (params?: any) => apiClient.get('/transport/routes', { params }),
-  getRouteById: (id: string) => apiClient.get(`/transport/routes/${id}`),
-  createRoute: (data: any) => apiClient.post('/transport/routes', data),
-  updateRoute: (id: string, data: any) => apiClient.put(`/transport/routes/${id}`, data),
+  // ROUTES & STOPS
+  getRoutes: async (params?: any) => {
+    const { data } = await apiClient.get('/transport/routes', { params });
+    return data;
+  },
+  createRoute: async (routeData: any) => {
+    const { data } = await apiClient.post('/transport/routes', routeData);
+    return data;
+  },
+  updateRoute: async (id: string, routeData: any) => {
+    const { data } = await apiClient.put(`/transport/routes/${id}`, routeData);
+    return data;
+  },
 
-  // --- Allocations ---
-  getNearestStops: (studentId: string, routeId: string) => 
-    apiClient.get('/transport/suggestions/nearest-stops', { params: { studentId, routeId } }),
-  getAllocations: (params?: any) => apiClient.get('/transport/allocations', { params }),
-  allocateStudent: (data: any) => apiClient.post('/transport/allocate', data),
+  // DRIVERS
+  getDrivers: async () => {
+    const { data } = await apiClient.get('/transport/drivers');
+    return data;
+  },
 
-  // --- Trips ---
-  getDriverAssignment: () => apiClient.get('/transport/driver/assignment'),
-  startTrip: (data: any) => apiClient.post('/transport/trips/start', data),
-  stopTrip: (id: string) => apiClient.post(`/transport/trips/${id}/stop`),
-  updateLocation: (data: { tripId: string; latitude: number; longitude: number; speed?: number }) => 
-    apiClient.post('/transport/trips/update-location', data),
-  
-  logMaintenance: (id: string, data: any) => apiClient.post(`/transport/vehicles/${id}/maintenance`, data),
-  logFuel: (id: string, data: any) => apiClient.post(`/transport/vehicles/${id}/fuel`, data),
+  // ALLOCATIONS
+  getAllocations: async (params?: any) => {
+    const { data } = await apiClient.get('/transport/allocations', { params });
+    return data;
+  },
+  assignStudent: async (allocationData: any) => {
+    const { data } = await apiClient.post('/transport/allocations', allocationData);
+    return data;
+  },
+  removeAssignment: async (studentId: string) => {
+    const { data } = await apiClient.delete(`/transport/allocations/${studentId}`);
+    return data;
+  },
 
-  // --- Dashboard ---
-  getStats: () => apiClient.get('/transport/stats'),
-  getGlobalLogs: () => apiClient.get('/transport/logs'),
-  getActiveTrip: () => apiClient.get('/transport/trips/active'),
-  getMyAllocation: () => apiClient.get('/transport/allocations/my'),
-  getSettings: () => apiClient.get('/transport/settings'),
-  updateSettings: (data: any) => apiClient.post('/transport/settings', data),
+  // DASHBOARD
+  getStats: async () => {
+    const { data } = await apiClient.get('/transport/dashboard/stats');
+    return data;
+  },
+
+  // STUDENT/PARENT VIEW
+  getMyTransport: async () => {
+    const { data } = await apiClient.get('/transport/my-transport');
+    return data;
+  }
 };

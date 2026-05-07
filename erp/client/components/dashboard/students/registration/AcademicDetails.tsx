@@ -24,11 +24,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AcademicDetailsProps {
     form: UseFormReturn<StudentRegistrationValues>;
-    onNext: () => void;
-    onPrev: () => void;
 }
 
-export default function AcademicDetails({ form, onNext, onPrev }: AcademicDetailsProps) {
+export default function AcademicDetails({ form }: AcademicDetailsProps) {
     const selectedClassId = form.watch("classId");
     
     const { 
@@ -181,11 +179,6 @@ export default function AcademicDetails({ form, onNext, onPrev }: AcademicDetail
                             </FormItem>
                         )}
                     />
-                </div>
-
-                <div className="flex justify-between">
-                    <Button type="button" variant="outline" onClick={onPrev}>Previous</Button>
-                    <Button type="button" onClick={onNext}>Next: Parent Details</Button>
                 </div>
             </CardContent>
         </Card>

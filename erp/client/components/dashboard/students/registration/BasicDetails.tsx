@@ -25,10 +25,9 @@ import { Upload, X } from "lucide-react";
 
 interface BasicDetailsProps {
     form: UseFormReturn<StudentRegistrationValues>;
-    onNext: () => void;
 }
 
-export default function BasicDetails({ form, onNext }: BasicDetailsProps) {
+export default function BasicDetails({ form }: BasicDetailsProps) {
     const photo = form.watch("photo");
 
     const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -242,10 +241,6 @@ export default function BasicDetails({ form, onNext }: BasicDetailsProps) {
                             </FormItem>
                         )}
                     />
-                </div>
-
-                <div className="flex justify-end">
-                    <Button type="button" onClick={onNext}>Next: Academic Details</Button>
                 </div>
             </CardContent>
         </Card>
