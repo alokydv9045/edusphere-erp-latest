@@ -321,10 +321,9 @@ class DashboardRepository {
     }
 
     async getLowStockItems() {
-        // Bug #17 fix: Using findMany with client-side filter for column comparison
-        // or just keep raw SQL if preferred, but ensuring it's cleaner.
-        // Prisma doesn't support column-to-column compare in 'where' natively yet.
-        const items = await prisma.inventoryItem.findMany();
+        const items = await prisma.inventoryItem.findMany({
+            select: { id: true, name: true, quantity: true, minStockLevel: true }
+        });
         return items.filter(item => item.quantity <= item.minStockLevel);
     }
 
@@ -439,6 +438,20 @@ class DashboardRepository {
         });
     }
 
+    async getInventoryItemNames(ids) {
+        return prisma.inventoryItem.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true }
+        });
+    }
+
+    async getAttendanceSlotsByDates(dates) {
+        return prisma.attendanceSlot.findMany({
+            where: { date: { in: dates } },
+            include: { class: { select: { name: true } } }
+        });
+    }
+
     async getFeeModeBreakdown(fromDate, toDate) {
         const where = { status: 'COMPLETED' };
         if (fromDate) {
@@ -539,7 +552,9 @@ class DashboardRepository {
         const [totalItems, outOfStock, lowStock] = await Promise.all([
             prisma.inventoryItem.count(),
             prisma.inventoryItem.count({ where: { quantity: 0 } }),
-            prisma.inventoryItem.findMany()
+            prisma.inventoryItem.findMany({
+                select: { quantity: true, minStockLevel: true }
+            })
         ]);
         
         const lowStockCount = lowStock.filter(item => item.quantity > 0 && item.quantity <= item.minStockLevel).length;

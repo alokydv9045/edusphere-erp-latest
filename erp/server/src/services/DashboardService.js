@@ -383,8 +383,15 @@ class DashboardService {
             timestamp: new Date(e.createdAt).getTime(),
         }));
 
-        for (const att of recentAttendance) {
-            const slot = await DashboardRepository.getAttendanceSlotByDate(att.date);
+        const attDates = recentAttendance.map(a => a.date);
+        const attSlots = attDates.length > 0 ? await DashboardRepository.getAttendanceSlotsByDates(attDates) : [];
+        const slotMap = attSlots.reduce((acc, s) => {
+            acc[s.date.toISOString()] = s;
+            return acc;
+        }, {});
+
+        recentAttendance.forEach(att => {
+            const slot = slotMap[att.date.toISOString()];
             activities.push({
                 id: `attendance-${att.date.getTime()}`,
                 type: 'Attendance',
@@ -392,7 +399,7 @@ class DashboardService {
                 time: getRelativeTime(att.date),
                 timestamp: new Date(att.date).getTime(),
             });
-        }
+        });
 
         recentLibrary.forEach(l => activities.push({
             id: `library-${l.id}`,
@@ -527,19 +534,21 @@ class DashboardService {
             DashboardRepository.countLibraryIssues('OVERDUE')
         ]);
 
-        const months = [];
         const today = new Date();
+        const monthPromises = [];
         for (let i = 5; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const start = new Date(d.getFullYear(), d.getMonth(), 1);
             const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
 
-            const count = await DashboardRepository.countLibraryIssues(null, { start, end });
-            months.push({
-                month: d.toLocaleString('default', { month: 'short' }),
-                count
-            });
+            monthPromises.push(
+                DashboardRepository.countLibraryIssues(null, { start, end }).then(count => ({
+                    month: d.toLocaleString('default', { month: 'short' }),
+                    count
+                }))
+            );
         }
+        const months = await Promise.all(monthPromises);
 
         return {
             summary: { totalBooks, issuedBooks, overdueBooks, availableBooks: totalBooks - issuedBooks },
@@ -555,27 +564,28 @@ class DashboardService {
             DashboardRepository.getLeaveDistribution()
         ]);
 
-        const trend = [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
+        
+        const trendPromises = [];
         for (let i = 6; i >= 0; i--) {
             const d = new Date(today);
             d.setDate(d.getDate() - i);
             const nextD = new Date(d);
             nextD.setDate(nextD.getDate() + 1);
 
-            const present = await DashboardRepository.getAttendanceCount({
-                date: { gte: d, lt: nextD },
-                attendeeType: { in: ['TEACHER', 'STAFF'] },
-                status: 'PRESENT'
-            });
-
-            trend.push({
-                date: d.toLocaleDateString('en-US', { weekday: 'short' }),
-                present
-            });
+            trendPromises.push(
+                DashboardRepository.getAttendanceCount({
+                    date: { gte: d, lt: nextD },
+                    attendeeType: { in: ['TEACHER', 'STAFF'] },
+                    status: 'PRESENT'
+                }).then(present => ({
+                    date: d.toLocaleDateString('en-US', { weekday: 'short' }),
+                    present
+                }))
+            );
         }
+        const trend = await Promise.all(trendPromises);
 
         return {
             summary: { totalTeachers, totalStaff, totalEmployees: totalTeachers + totalStaff },
@@ -586,27 +596,31 @@ class DashboardService {
 
     async getFinanceStats() {
         const today = new Date();
-        const months = [];
+        const monthPromises = [];
 
         for (let i = 5; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const start = new Date(d.getFullYear(), d.getMonth(), 1);
             const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
 
-            const incomeRes = await DashboardRepository.getFeeSum('COMPLETED', start, end);
-            const pendingRes = await DashboardRepository.getFeeSum('PENDING', start, end);
-
-            const income = parseFloat(incomeRes._sum.amount || 0);
-            const pending = parseFloat(pendingRes._sum.amount || 0);
-            const target = (income + pending) * 0.9; // Target 90% collection
-
-            months.push({
-                month: d.toLocaleString('default', { month: 'short' }),
-                collected: income,
-                pending: pending,
-                target
-            });
+            monthPromises.push(
+                Promise.all([
+                    DashboardRepository.getFeeSum('COMPLETED', start, end),
+                    DashboardRepository.getFeeSum('PENDING', start, end)
+                ]).then(([incomeRes, pendingRes]) => {
+                    const income = parseFloat(incomeRes._sum.amount || 0);
+                    const pending = parseFloat(pendingRes._sum.amount || 0);
+                    const target = (income + pending) * 0.9;
+                    return {
+                        month: d.toLocaleString('default', { month: 'short' }),
+                        collected: income,
+                        pending: pending,
+                        target
+                    };
+                })
+            );
         }
+        const months = await Promise.all(monthPromises);
 
         const modeBreakdown = await DashboardRepository.getFeeModeBreakdown();
 
@@ -649,18 +663,30 @@ class DashboardService {
             value: Number(c._sum.quantity || 0)
         }));
 
-        const movementData = await Promise.all(movements.map(async m => {
-            const name = await DashboardRepository.getInventoryItemName(m.itemId);
-            return {
-                name: name ? name.name : 'Unknown',
-                movements: m._count.id
-            };
+        const itemIds = movements.map(m => m.itemId);
+        const items = itemIds.length > 0 ? await DashboardRepository.getInventoryItemNames(itemIds) : [];
+        const itemMap = items.reduce((acc, i) => ({ ...acc, [i.id]: i.name }), {});
+
+        const movementData = movements.map(m => ({
+            name: itemMap[m.itemId] || 'Unknown',
+            movements: m._count.id
         }));
 
         return {
             stockDistribution,
             movementData
         };
+    }
+
+    async getAdmissionStats() {
+        const classDistribution = await DashboardRepository.getClassDistribution();
+        const classes = await DashboardRepository.getClassesByIds(classDistribution.map(item => item.currentClassId));
+        const classMap = classes.reduce((acc, curr) => ({ ...acc, [curr.id]: curr.name }), {});
+
+        return classDistribution.map(item => ({
+            name: classMap[item.currentClassId] || 'Unknown',
+            count: item._count.id
+        }));
     }
 }
 

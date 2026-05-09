@@ -19,6 +19,7 @@
 
 const prisma = require('../config/database');
 const { sendWhatsApp } = require('./whatsappGateway');
+const { sendSMS }      = require('./smsGateway');
 
 // ─────────────────────────────────────────────────────────────
 // Try to load BullMQ — graceful fallback if not installed yet
@@ -125,9 +126,18 @@ async function processOneQueueRow(queueRowId) {
     data: { status: 'PROCESSING' },
   });
 
-  const result = await sendWhatsApp(row.phoneNumber, row.message);
+  const [waResult, smsResult] = await Promise.all([
+    sendWhatsApp(row.phoneNumber, row.message),
+    sendSMS(row.phoneNumber, row.message),
+  ]);
 
-  if (result.success) {
+  const success = waResult.success || smsResult.success;
+  const providerResponse = {
+    whatsapp: waResult.providerResponse,
+    sms: smsResult.providerResponse
+  };
+
+  if (success) {
     await Promise.all([
       prisma.notificationQueue.update({
         where: { id: queueRowId },
@@ -140,7 +150,7 @@ async function processOneQueueRow(queueRowId) {
           message: row.message,
           deliveryStatus: 'sent',
           notifType: row.notifType,
-          providerResponse: JSON.stringify(result.providerResponse),
+          providerResponse: JSON.stringify(providerResponse),
         },
       }),
     ]);
@@ -150,7 +160,7 @@ async function processOneQueueRow(queueRowId) {
         where: { id: queueRowId },
         data: {
           status: 'FAILED',
-          failureReason: JSON.stringify(result.providerResponse).slice(0, 500),
+          failureReason: JSON.stringify(providerResponse).slice(0, 500),
         },
       }),
       prisma.notificationLog.create({
@@ -160,7 +170,7 @@ async function processOneQueueRow(queueRowId) {
           message: row.message,
           deliveryStatus: 'failed',
           notifType: row.notifType,
-          providerResponse: JSON.stringify(result.providerResponse),
+          providerResponse: JSON.stringify(providerResponse),
         },
       }),
     ]);

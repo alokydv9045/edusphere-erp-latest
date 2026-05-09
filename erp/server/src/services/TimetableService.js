@@ -48,18 +48,10 @@ class TimetableService {
 
         if (existing) return existing;
 
-        // Try to get current academic year for the new timetable
-        const academicYear = await prisma.academicYear.findFirst({ where: { isCurrent: true } });
-
-        if (!academicYear) {
-            throw new Error('Current academic year not found. Please set an academic year as current first.');
-        }
-
         return prisma.timetable.create({
             data: {
                 name,
                 classId,
-                academicYearId: academicYear.id,
                 effectiveFrom: new Date(),
                 isActive: true
             }

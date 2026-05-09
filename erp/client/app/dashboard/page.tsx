@@ -630,7 +630,7 @@ export default function DashboardPage() {
           {/* ── Real-time Analytics ── */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <RealtimeChart title="Attendance Trend" endpoint="/dashboard/attendance-trend" socketEvent="ATTENDANCE_MARKED" type="area" xAxisKey="date" dataKey="percentage" color="var(--primary)" description="Student presence over 7 days" />
-            <RealtimeChart title="Admission Activity" endpoint="/dashboard/stats" socketEvent="STUDENT_REGISTERED" type="bar" xAxisKey="name" dataKey="count" color="#10b981" description="Registration funnel by class" />
+            <RealtimeChart title="Admission Activity" endpoint="/dashboard/admission-stats" socketEvent="STUDENT_REGISTERED" type="bar" xAxisKey="name" dataKey="count" color="#10b981" description="Registration funnel by class" />
             <RealtimeChart title="Financial Overview" endpoint="/dashboard/finance-stats" socketEvent="FINANCE_UPDATE" type="pie" xAxisKey="name" dataKey="value" dataProperty="modes" colors={["#6366f1", "#f59e0b", "#10b981", "#ef4444"]} description="Current payment mode distribution" />
           </div>
 

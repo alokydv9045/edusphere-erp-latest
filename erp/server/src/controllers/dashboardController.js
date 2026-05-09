@@ -124,6 +124,14 @@ const getInventoryStats = asyncHandler(async (req, res) => {
   res.json({ success: true, ...stats });
 });
 
+/**
+ * Get admission statistics
+ */
+const getAdmissionStats = asyncHandler(async (req, res) => {
+  const data = await DashboardService.getAdmissionStats();
+  res.json({ success: true, data });
+});
+
 module.exports = {
   getDashboardStats,
   getRecentActivities,
@@ -138,7 +146,8 @@ module.exports = {
   getHRStats,
   getFinanceStats,
   getExamStats,
-  getInventoryStats
+  getInventoryStats,
+  getAdmissionStats
 };
 
 

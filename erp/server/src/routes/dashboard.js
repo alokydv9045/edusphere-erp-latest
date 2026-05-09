@@ -15,8 +15,9 @@ const {
   getHRStats,
   getFinanceStats,
   getExamStats,
-  getInventoryStats
-} = require('../controllers/dashboardController');
+  getInventoryStats,
+  getAdmissionStats
+} = require('../controllers/DashboardController');
 
 // All dashboard routes require authentication
 router.use(authMiddleware);
@@ -50,5 +51,6 @@ router.get('/hr-stats', getHRStats);
 router.get('/finance-stats', getFinanceStats);
 router.get('/exam-stats', getExamStats);
 router.get('/inventory-stats', getInventoryStats);
+router.get('/admission-stats', getAdmissionStats);
 
 module.exports = router;
