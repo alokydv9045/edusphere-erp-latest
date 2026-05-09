@@ -1,9 +1,13 @@
 services:
-  # ── EduSphere Backend API ──────────────────────────────────────────────────
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 🟢 ERP SYSTEM (School Portal)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  
+  # ERP Backend API
   - type: web
-    name: edusphere-api
+    name: edusphere-erp-api
     env: node
-    plan: free # or starter
+    plan: free
     buildCommand: npm install && npx prisma generate && npx prisma migrate deploy
     startCommand: npm start
     rootDir: erp/server
@@ -14,12 +18,12 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: edusphere-db
+          name: edusphere-erp-db
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: edusphere-cache
+          name: edusphere-erp-cache
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
@@ -28,34 +32,18 @@ services:
       - key: ALLOWED_ORIGINS
         fromService:
           type: web
-          name: edusphere-client
+          name: edusphere-erp-client
           property: url
       
-      # Razorpay
+      # ERP Specific Secrets (Sync manually)
+      - key: FAST2SMS_API_KEY
+        sync: false
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
-
-      # Notifications (Fast2SMS & WhatsApp)
-      - key: FAST2SMS_API_KEY
-        sync: false
-      - key: WHATSAPP_API_URL
-        value: https://graph.facebook.com/v18.0
-      - key: WHATSAPP_PHONE_NUMBER_ID
-        sync: false
-      - key: WHATSAPP_ACCESS_TOKEN
-        sync: false
       - key: GEMINI_API_KEY
         sync: false
-
-      # School Identity
-      - key: SCHOOL_ID
-        sync: false
-      - key: SCHOOL_NAME
-        sync: false
-
-      # Cloudinary
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
@@ -63,11 +51,11 @@ services:
       - key: CLOUDINARY_API_SECRET
         sync: false
 
-  # ── EduSphere Frontend Client ──────────────────────────────────────────────
+  # ERP Frontend Client
   - type: web
-    name: edusphere-client
+    name: edusphere-erp-client
     env: node
-    plan: free # or starter
+    plan: free
     buildCommand: npm install && npm run build
     startCommand: npx next start -p $PORT
     rootDir: erp/client
@@ -75,18 +63,82 @@ services:
       - key: NEXT_PUBLIC_API_URL
         fromService:
           type: web
-          name: edusphere-api
+          name: edusphere-erp-api
+          property: url
+          suffix: /api
+      - key: PORT
+        value: 3001
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 🔵 ADMIN SYSTEM (Management Portal)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  # Admin Backend API
+  - type: web
+    name: edusphere-admin-api
+    env: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy
+    startCommand: npm start
+    rootDir: Admin/server
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: edusphere-admin-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        fromService:
+          type: web
+          name: edusphere-admin-client
+          property: url
+      
+      # Admin Specific Config
+      - key: ADMIN_EMAIL
+        value: admin@edusphere.com
+      - key: ADMIN_PASSWORD
+        sync: false # Set this in Render dashboard
+
+  # Admin Frontend Client
+  - type: web
+    name: edusphere-admin-client
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npx next start -p $PORT
+    rootDir: Admin/client
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: edusphere-admin-api
           property: url
           suffix: /api
       - key: PORT
         value: 3000
 
-# ── Databases & Infrastructure ────────────────────────────────────────────────
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🛠️ INFRASTRUCTURE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 databases:
-  - name: edusphere-db
-    plan: free # or standard
+  # ERP Database
+  - name: edusphere-erp-db
+    plan: free
+  
+  # Admin Database
+  - name: edusphere-admin-db
+    plan: free
 
 redis:
-  - name: edusphere-cache
-    plan: free # or standard
-    ipAllowList: [] # Allow internal access only
+  # ERP Redis (for BullMQ)
+  - name: edusphere-erp-cache
+    plan: free
+    ipAllowList: []
