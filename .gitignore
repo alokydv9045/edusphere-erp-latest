@@ -10,13 +10,13 @@ out/
 bin/
 obj/
 
-# Environment variables (Included per user request - WARNING: Potential security risk)
-# .env
-# .env.local
-# .env.development.local
-# .env.test.local
-# .env.production.local
-# *.env*
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env*
 
 # Logs
 npm-debug.log*
