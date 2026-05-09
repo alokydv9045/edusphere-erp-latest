@@ -6,7 +6,7 @@ services:
     plan: free # or starter
     buildCommand: npm install && npm run build
     startCommand: npm start
-    rootDir: server
+    rootDir: erp/server
     envVars:
       - key: PORT
         value: 5001
@@ -61,7 +61,7 @@ services:
     plan: free # or starter
     buildCommand: npm install && npm run build
     startCommand: npx next start -p $PORT
-    rootDir: client
+    rootDir: erp/client
     envVars:
       - key: NEXT_PUBLIC_API_URL
         fromService:
