@@ -30,10 +30,7 @@ services:
       - key: COOKIE_SECRET
         generateValue: true
       - key: ALLOWED_ORIGINS
-        fromService:
-          type: web
-          name: edusphere-erp-client
-          property: url
+        sync: false # Set manually to the Frontend URL after deployment
       
       # ERP Specific Secrets (Sync manually)
       - key: FAST2SMS_API_KEY
@@ -61,15 +58,11 @@ services:
     rootDir: erp/client
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: edusphere-erp-api
-          property: url
-          suffix: /api
+        sync: false # Set manually to the Backend API URL (e.g., https://api.onrender.com/api)
       - key: PORT
         value: 3001
 
-  # ERP Redis (for BullMQ) - Moved into services
+  # ERP Redis (for BullMQ)
   - type: redis
     name: edusphere-erp-cache
     plan: free
@@ -101,10 +94,7 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: ALLOWED_ORIGINS
-        fromService:
-          type: web
-          name: edusphere-admin-client
-          property: url
+        sync: false # Set manually to the Admin Frontend URL
       
       # Admin Specific Config
       - key: ADMIN_EMAIL
@@ -122,11 +112,7 @@ services:
     rootDir: Admin/client
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: edusphere-admin-api
-          property: url
-          suffix: /api
+        sync: false # Set manually to the Admin Backend API URL
       - key: PORT
         value: 3000
 
