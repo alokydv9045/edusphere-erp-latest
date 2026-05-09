@@ -1,5 +1,7 @@
 const prisma = require('../config/database');
 const { checkGeofence } = require('../utils/geoUtils');
+const asyncHandler = require('../utils/asyncHandler');
+const logger = require('../config/logger');
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -18,8 +20,7 @@ const buildScannerWhere = (query) => {
 
 // ── Get all scanners ─────────────────────────────────────────────────
 
-const getScanners = async (req, res) => {
-    try {
+const getScanners = asyncHandler(async (req, res) => {
         const where = buildScannerWhere(req.query);
 
         const scanners = await prisma.qRScanner.findMany({
@@ -30,17 +31,12 @@ const getScanners = async (req, res) => {
             },
         });
 
-        res.json({ success: true, scanners });
-    } catch (error) {
-        console.error('getScanners error:', error);
-        res.status(500).json({ success: false, message: 'Failed to fetch scanners', error: error.message });
-    }
-};
+        res.status(200).json({ success: true, scanners });
+});
 
 // ── Create scanner ───────────────────────────────────────────────────
 
-const createScanner = async (req, res) => {
-    try {
+const createScanner = asyncHandler(async (req, res) => {
         const {
             name,
             location,
@@ -74,16 +70,11 @@ const createScanner = async (req, res) => {
         });
 
         res.status(201).json({ success: true, message: 'Scanner created successfully', scanner });
-    } catch (error) {
-        console.error('createScanner error:', error);
-        res.status(500).json({ success: false, message: 'Failed to create scanner', error: error.message });
-    }
-};
+});
 
 // ── Get single scanner ───────────────────────────────────────────────
 
-const getScannerById = async (req, res) => {
-    try {
+const getScannerById = asyncHandler(async (req, res) => {
         const { id } = req.params;
 
         const scanner = await prisma.qRScanner.findUnique({
@@ -106,17 +97,12 @@ const getScannerById = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Scanner not found' });
         }
 
-        res.json({ success: true, scanner });
-    } catch (error) {
-        console.error('getScannerById error:', error);
-        res.status(500).json({ success: false, message: 'Failed to fetch scanner', error: error.message });
-    }
-};
+        res.status(200).json({ success: true, scanner });
+});
 
 // ── Update scanner ───────────────────────────────────────────────────
 
-const updateScanner = async (req, res) => {
-    try {
+const updateScanner = asyncHandler(async (req, res) => {
         const { id } = req.params;
         const {
             name,
@@ -145,17 +131,12 @@ const updateScanner = async (req, res) => {
         if (isActive !== undefined) data.isActive = isActive;
 
         const scanner = await prisma.qRScanner.update({ where: { id }, data });
-        res.json({ success: true, message: 'Scanner updated successfully', scanner });
-    } catch (error) {
-        console.error('updateScanner error:', error);
-        res.status(500).json({ success: false, message: 'Failed to update scanner', error: error.message });
-    }
-};
+        res.status(200).json({ success: true, message: 'Scanner updated successfully', scanner });
+});
 
 // ── Delete scanner (soft) ────────────────────────────────────────────
 
-const deleteScanner = async (req, res) => {
-    try {
+const deleteScanner = asyncHandler(async (req, res) => {
         const { id } = req.params;
         const existing = await prisma.qRScanner.findUnique({ where: { id } });
         if (!existing) {
@@ -163,17 +144,12 @@ const deleteScanner = async (req, res) => {
         }
 
         await prisma.qRScanner.update({ where: { id }, data: { isActive: false } });
-        res.json({ success: true, message: 'Scanner deactivated successfully' });
-    } catch (error) {
-        console.error('deleteScanner error:', error);
-        res.status(500).json({ success: false, message: 'Failed to deactivate scanner', error: error.message });
-    }
-};
+        res.status(200).json({ success: true, message: 'Scanner deactivated successfully' });
+});
 
 // ── Get scanner stats ────────────────────────────────────────────────
 
-const getScannerStats = async (req, res) => {
-    try {
+const getScannerStats = asyncHandler(async (req, res) => {
         const { id } = req.params;
 
         const scanner = await prisma.qRScanner.findUnique({ where: { id } });
@@ -200,15 +176,11 @@ const getScannerStats = async (req, res) => {
             }),
         ]);
 
-        res.json({
+        res.status(200).json({
             success: true,
             stats: { totalScans, todayScans, monthScans, lastScan },
         });
-    } catch (error) {
-        console.error('getScannerStats error:', error);
-        res.status(500).json({ success: false, message: 'Failed to get stats', error: error.message });
-    }
-};
+});
 
 module.exports = {
     getScanners,

@@ -6,6 +6,7 @@ const {
   updateStudent,
   deleteStudent,
   getStudentAttendance,
+  getAttendanceReport, // Import new method
   registerStudent,
   getMeStudent,
   updateMeStudent
@@ -44,6 +45,9 @@ router.get('/:id', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT', 
 
 // Get student attendance
 router.get('/:id/attendance', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'ADMISSION_MANAGER'), getStudentAttendance);
+
+// Get attendance report (PDF)
+router.get('/:id/attendance/report', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'ADMISSION_MANAGER'), getAttendanceReport);
 
 // Create student (Admin / Admission Manager only — Accountant removed)
 router.post(

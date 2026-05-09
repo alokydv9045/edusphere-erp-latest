@@ -10,12 +10,14 @@ if (missing.length > 0) {
 }
 
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const logger = require('./src/config/logger');
+const cookieParser = require('cookie-parser');
 
 // Routes
 const authRoutes = require('./src/routes/authRoutes');
@@ -40,11 +42,24 @@ const paymentRoutes = require('./src/routes/paymentRoutes');
 const schoolConfigRoutes = require('./src/routes/schoolConfigRoutes');
 const enquiryRoutes = require('./src/routes/enquiryRoutes');
 const scannerRoutes = require('./src/routes/scannerRoutes');
+const assignmentRoutes = require('./src/routes/assignmentRoutes');
+const transportRoutes = require('./src/routes/transportRoutes');
+const calendarRoutes = require('./src/routes/calendarRoutes');
+const timetableRoutes = require('./src/routes/timetableRoutes');
+const backupRoutes = require('./src/routes/backupRoutes');
+const aiRoutes = require('./src/routes/AiRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
+const { initSocket } = require('./src/services/socketService');
+const { initScheduler } = require('./src/config/scheduler');
+const errorHandler = require('./src/middleware/errorHandler');
 
 // Initialize app
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5001;
+
+// Trust proxy for Render's load balancer (needed for rate limiting and secure cookies)
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
@@ -58,9 +73,14 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+// Initialize Socket.io
+const io = initSocket(server, corsOptions);
+app.set('io', io);
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // Compression
 app.use(compression());
@@ -121,6 +141,12 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/school-config', schoolConfigRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/scanners', scannerRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/calendar', calendarRoutes);
+app.use('/api/timetables', timetableRoutes);
+app.use('/api/admin/backups', backupRoutes);
+app.use('/api/ai', aiRoutes);
 app.use('/api/notifications', notificationRoutes);
 
 // 404 handler
@@ -129,24 +155,17 @@ app.use((req, res) => {
 });
 
 // Error handler
-app.use((err, req, res, next) => {
-  logger.error('Unhandled Error:', err);
-
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal server error';
-
-  res.status(statusCode).json({
-    error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
-});
+app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`\n🚀 School ERP Server running on http://localhost:${PORT}`);
-  console.log(`🏫 School: ${process.env.SCHOOL_NAME} (${process.env.SCHOOL_ID})`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/health\n`);
+server.listen(PORT, () => {
+  logger.info(`🚀 School ERP Server running on http://localhost:${PORT}`);
+  logger.info(`🏫 School: ${process.env.SCHOOL_NAME} (${process.env.SCHOOL_ID})`);
+  logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
+  logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
+
+  // Start Backup Scheduler
+  initScheduler();
 
   // Start notification scheduler and queue worker
   try {
@@ -154,8 +173,8 @@ app.listen(PORT, () => {
     const { startQueueWorker } = require('./src/notifications/notificationQueue');
     startQueueWorker();
     startScheduler();
-    console.log('🔔 Notification scheduler & queue worker started');
+    logger.info('🔔 Notification scheduler & queue worker started');
   } catch (err) {
-    console.warn('⚠️  Notification scheduler could not start (install bullmq + node-cron):', err.message);
+    logger.warn('⚠️  Notification scheduler could not start (install bullmq + node-cron):', err.message);
   }
 });

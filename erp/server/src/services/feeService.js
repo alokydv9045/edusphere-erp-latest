@@ -1,6 +1,8 @@
 const feeRepo = require('../repositories/feeRepository');
+const prisma = require('../config/database');
 const NotFoundError = require('../errors/NotFoundError');
 const ValidationError = require('../errors/ValidationError');
+const logger = require('../config/logger');
 
 class FeeService {
     /**
@@ -14,34 +16,27 @@ class FeeService {
         if (academicYearId) where.academicYearId = academicYearId;
         if (isActive !== undefined) where.isActive = isActive === 'true';
 
-        const feeStructures = await feeRepo.findFeeStructures(where);
+        // Bug #7 fix: Use include to fetch class + academicYear in one query
+        const feeStructures = await feeRepo.findFeeStructures(where, {
+            class: { select: { id: true, name: true } },
+            academicYear: { select: { id: true, name: true } },
+            items: true,
+        });
 
-        // Enrich with Class and Academic Year
-        const enrichedStructures = await Promise.all(
-            feeStructures.map(async (structure) => {
-                let classDetails = null;
-                let academicYearDetails = null;
-                if (structure.classId) {
-                    classDetails = await feeRepo.findClassById(structure.classId);
-                }
-                if (structure.academicYearId) {
-                    academicYearDetails = await feeRepo.findAcademicYearById(structure.academicYearId);
-                }
-                return {
-                    ...structure,
-                    amount: structure.totalAmount, // Alias for frontend compatibility
-                    class: classDetails,
-                    academicYear: academicYearDetails,
-                };
-            })
-        );
+        const enrichedStructures = feeStructures.map(structure => ({
+            ...structure,
+            amount: structure.totalAmount, // Alias for frontend compatibility
+        }));
 
-        const total = enrichedStructures.length;
+        // Bug #9 fix: Apply pagination slice
         const page = parseInt(filters.page) || 1;
         const limit = parseInt(filters.limit) || 10;
+        const total = enrichedStructures.length;
+        const start = (page - 1) * limit;
+        const paginatedStructures = enrichedStructures.slice(start, start + limit);
 
         return {
-            structures: enrichedStructures,
+            structures: paginatedStructures,
             pagination: {
                 total,
                 pages: Math.ceil(total / limit),
@@ -60,6 +55,7 @@ class FeeService {
             classId,
             sectionId,
             status, // PAID, PENDING, or OVERDUE
+            month,
             page = 1,
             limit = 10
         } = query;
@@ -91,15 +87,44 @@ class FeeService {
 
             if (student.feeLedgers && student.feeLedgers.length > 0) {
                 totalPayable = student.feeLedgers.reduce((sum, l) => sum + (l.totalPayable || 0), 0);
-                totalPaid = student.feeLedgers.reduce((sum, l) => sum + (l.totalPaid || 0), 0);
-                totalPending = student.feeLedgers.reduce((sum, l) => sum + (l.totalPending || 0), 0);
+
+                if (month && month !== 'all') {
+                    let monthPaid = 0;
+                    student.feeLedgers.forEach(l => {
+                        if (l.payments) {
+                            l.payments.forEach(p => {
+                                const paymentMonth = new Date(p.paymentDate).getMonth() + 1;
+                                if (paymentMonth === parseInt(month) && p.status === 'COMPLETED') {
+                                    monthPaid += p.amount;
+                                }
+                            });
+                        }
+                    });
+                    totalPaid = monthPaid;
+                    totalPending = student.feeLedgers.reduce((sum, l) => sum + (l.totalPending || 0), 0);
+                } else {
+                    totalPaid = student.feeLedgers.reduce((sum, l) => sum + (l.totalPaid || 0), 0);
+                    totalPending = student.feeLedgers.reduce((sum, l) => sum + (l.totalPending || 0), 0);
+                }
             }
 
             let computedStatus = 'PAID';
             if (totalPayable === 0) {
                 computedStatus = 'N/A';
             } else if (totalPending > 0) {
-                computedStatus = totalPaid > 0 ? 'PARTIAL' : 'PENDING';
+                // Bug #22 fix: Check if any ledger is actually overdue
+                const today = new Date();
+                const currentDay = today.getDate();
+                const isAnyOverdue = student.feeLedgers.some(l => {
+                    const dueDay = l.feeStructure?.dueDay || 10;
+                    return l.totalPending > 0 && currentDay > dueDay;
+                });
+                
+                if (isAnyOverdue) {
+                    computedStatus = 'OVERDUE';
+                } else {
+                    computedStatus = totalPaid > 0 ? 'PARTIAL' : 'PENDING';
+                }
             }
 
             return {
@@ -116,21 +141,23 @@ class FeeService {
             };
         });
 
-        // Filter by computed fee status if provided
+        // Bug #22 fix: Handle OVERDUE status filter
         let resultStudents = enrichedStudents;
         if (status) {
             resultStudents = resultStudents.filter(s => {
                 if (status === 'PAID') return s.feeStatus === 'PAID';
                 if (status === 'PENDING') return s.feeStatus === 'PENDING' || s.feeStatus === 'PARTIAL';
+                if (status === 'OVERDUE') return s.feeStatus === 'PENDING' || s.feeStatus === 'PARTIAL';
                 return true;
             });
         }
 
+        // Bug #8 fix: Use filtered count for pagination, not raw DB count
         return {
             students: resultStudents,
             pagination: {
-                total,
-                pages: Math.ceil(total / take),
+                total: status ? resultStudents.length : total,
+                pages: Math.ceil((status ? resultStudents.length : total) / take),
                 page: parseInt(page),
                 limit: take
             }
@@ -154,7 +181,8 @@ class FeeService {
             throw new ValidationError(`An active fee structure named '${data.name}' already exists for this class and academic year`);
         }
 
-        const totalAmount = data.feeHeads.reduce((sum, head) => sum + parseFloat(head.amount || 0), 0);
+        const feeHeads = data.feeHeads || [];
+        const totalAmount = feeHeads.reduce((sum, head) => sum + parseFloat(head.amount || 0), 0);
 
         const feeStructureData = {
             name: data.name,
@@ -167,7 +195,7 @@ class FeeService {
             earlyPaymentDiscount: parseFloat(data.earlyPaymentDiscount || 0),
             latePaymentPenalty: parseFloat(data.latePaymentPenalty || 0),
             items: {
-                create: data.feeHeads.map(item => ({
+                create: feeHeads.map(item => ({
                     headName: item.headName,
                     amount: parseFloat(item.amount || 0),
                 })),
@@ -192,10 +220,10 @@ class FeeService {
             if (students.length > 0) {
                 const studentIds = students.map(s => s.id);
                 await feeRepo.syncStudentFeeLedgers(studentIds, structure);
-                console.log(`[FeeService] Synced ${students.length} students with structure ${structure.name}`);
+                logger.info(`[FeeService] Synced ${students.length} students with structure ${structure.name}`);
             }
         } catch (err) {
-            console.error('[FeeService] Failed to sync students with structure:', err.message);
+            logger.error(`[FeeService] Failed to sync students with structure: ${err.message}`);
             // We don't throw here to avoid failing the main creation process, 
             // but in a production app we might want to queue this or retry.
         }
@@ -239,7 +267,9 @@ class FeeService {
 
         if (data.feeHeads) {
             updateData.totalAmount = data.feeHeads.reduce((sum, head) => sum + parseFloat(head.amount || 0), 0);
+            // Bug #12 fix: Delete old items before creating new ones
             updateData.items = {
+                deleteMany: {},
                 create: data.feeHeads.map(item => ({
                     headName: item.headName,
                     amount: parseFloat(item.amount || 0),
@@ -311,6 +341,15 @@ class FeeService {
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             throw new ValidationError('Invalid amount value');
         }
+        // Financial Idempotency Check: Prevent duplicate transaction entries
+        if (data.transactionId && data.paymentMode !== 'CASH') {
+            const existingPayment = await prisma.feePayment.findFirst({
+                where: { transactionId: data.transactionId }
+            });
+            if (existingPayment) {
+                throw new ValidationError(`Transaction ID '${data.transactionId}' has already been processed.`);
+            }
+        }
 
         const result = await feeRepo.createFeePaymentTx(
             data.studentId,
@@ -332,8 +371,9 @@ class FeeService {
      */
     async getStudentFeeStatus(studentId, academicYearId) {
         const ledgers = await feeRepo.findStudentLedgers(studentId, academicYearId);
-        if (!ledgers) {
-            throw new Error('Database schema mismatch. Please run "npm run prisma:push && npm run prisma:generate" in the server terminal to apply fee system updates.');
+        // Bug #23 fix: findMany returns [] not null, so check length
+        if (!ledgers || ledgers.length === 0) {
+            // Return empty summary instead of throwing — student may simply have no fees assigned
         }
 
         const student = await feeRepo.findStudentForFeeStatus(studentId);
@@ -453,6 +493,71 @@ class FeeService {
             },
             trend: trendData,
             defaulters,
+        };
+    }
+
+    /**
+     * Get class-wise fee report
+     */
+    async getClassWiseReport(query) {
+        const { academicYearId, classId, sectionId } = query;
+        
+        const where = { status: 'ACTIVE' };
+        if (classId) where.currentClassId = classId;
+        if (sectionId) where.sectionId = sectionId;
+        
+        const students = await prisma.student.findMany({
+            where,
+            include: {
+                currentClass: true,
+                section: true,
+                feeLedgers: {
+                    where: academicYearId ? { academicYearId } : {},
+                }
+            }
+        });
+
+        const classMap = {};
+
+        students.forEach(student => {
+            const classKey = student.currentClass?.id;
+            if (!classKey) return;
+
+            if (!classMap[classKey]) {
+                classMap[classKey] = {
+                    classId: classKey,
+                    className: student.currentClass.name,
+                    totalStudents: 0,
+                    totalCollection: 0,
+                    totalPending: 0,
+                    paidStudentsCount: 0,
+                    pendingStudentsCount: 0,
+                };
+            }
+
+            const c = classMap[classKey];
+            c.totalStudents++;
+
+            let studentPaid = 0;
+            let studentPending = 0;
+
+            student.feeLedgers.forEach(l => {
+                studentPaid += (l.totalPaid || 0);
+                studentPending += (l.totalPending || 0);
+            });
+
+            c.totalCollection += studentPaid;
+            c.totalPending += studentPending;
+
+            if (studentPending === 0 && studentPaid > 0) {
+                 c.paidStudentsCount++;
+            } else if (studentPending > 0) {
+                 c.pendingStudentsCount++;
+            }
+        });
+
+        return {
+             report: Object.values(classMap)
         };
     }
 }

@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const crypto = require('crypto');
+const logger = require('../config/logger');
 
 // Generate a unique receipt/refund number that is safe under concurrency
 const generateUniqueId = (prefix) => `${prefix}${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
@@ -8,13 +9,11 @@ class FeeRepository {
     /**
      * Find fee structures with filtering
      */
-    async findFeeStructures(where) {
+    async findFeeStructures(where, include = { items: true }) {
         return prisma.feeStructure.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: {
-                items: true,
-            },
+            include,
         });
     }
 
@@ -43,23 +42,33 @@ class FeeRepository {
 
             const total = await prisma.student.count({ where });
 
-            // Fetch ledgers safely for each student sequentially to respect connection limits
-            const enrichedStudents = [];
-            for (const student of students) {
-                let feeLedgers = [];
-                try {
-                    feeLedgers = await prisma.studentFeeLedger.findMany({
-                        where: { studentId: student.id }
-                    });
-                } catch (err) {
-                    // Silently ignore if studentFeeLedger model doesn't exist yet
-                }
-                enrichedStudents.push({ ...student, feeLedgers });
+            const studentIds = students.map(s => s.id);
+            let allLedgers = [];
+            try {
+                allLedgers = await prisma.studentFeeLedger.findMany({
+                    where: { studentId: { in: studentIds } },
+                    include: { feeStructure: true, payments: true }
+                });
+            } catch (err) {
+                // Silently ignore if model doesn't exist
             }
+
+            const ledgersByStudent = {};
+            for (const ledger of allLedgers) {
+                if (!ledgersByStudent[ledger.studentId]) {
+                    ledgersByStudent[ledger.studentId] = [];
+                }
+                ledgersByStudent[ledger.studentId].push(ledger);
+            }
+
+            const enrichedStudents = students.map(student => ({
+                ...student,
+                feeLedgers: ledgersByStudent[student.id] || []
+            }));
 
             return [enrichedStudents, total];
         } catch (err) {
-            console.error('[feeRepository] Error fetching fee students:', err.message);
+            logger.error(`[feeRepository] Error fetching fee students: ${err.message}`);
             return [[], 0];
         }
     }
@@ -179,8 +188,38 @@ class FeeRepository {
      * Delete fee structure
      */
     async deleteFeeStructure(id) {
-        return prisma.feeStructure.delete({
-            where: { id },
+        return prisma.$transaction(async (tx) => {
+            // 1. Delete associated payments
+            await tx.feePayment.deleteMany({
+                where: { feeStructureId: id }
+            });
+
+            // 2. Delete associated ledgers
+            // (FeeAdjustments will cascade automatically from ledger via DB constraint if set,
+            // but just to be safe if DB level cascade isn't applied, we can delete them too)
+            const ledgers = await tx.studentFeeLedger.findMany({
+                where: { feeStructureId: id },
+                select: { id: true }
+            });
+            const ledgerIds = ledgers.map(l => l.id);
+            if (ledgerIds.length > 0) {
+                await tx.feeAdjustment.deleteMany({
+                    where: { ledgerId: { in: ledgerIds } }
+                });
+                await tx.studentFeeLedger.deleteMany({
+                    where: { feeStructureId: id }
+                });
+            }
+
+            // 3. Delete fee structure items (explicitly to be safe)
+            await tx.feeStructureItem.deleteMany({
+                where: { feeStructureId: id }
+            });
+
+            // 4. Finally delete the fee structure
+            return tx.feeStructure.delete({
+                where: { id },
+            });
         });
     }
 
@@ -271,16 +310,12 @@ class FeeRepository {
                 },
             });
 
-            const newPaid = ledger.totalPaid + parsedAmount;
-            const newPending = ledger.totalPending - parsedAmount;
-            const newStatus = newPending <= 0 ? 'PAID' : 'PARTIALLY_PAID';
-
             const updatedLedger = await tx.studentFeeLedger.update({
                 where: { id: ledger.id },
                 data: {
-                    totalPaid: newPaid,
-                    totalPending: newPending,
-                    status: newStatus,
+                    totalPaid: { increment: parsedAmount },
+                    totalPending: { decrement: parsedAmount },
+                    status: (ledger.totalPending - parsedAmount) <= 0 ? 'PAID' : 'PARTIALLY_PAID',
                 },
             });
 
@@ -322,7 +357,7 @@ class FeeRepository {
         } catch (err) {
             // Prisma client hasn't been regenerated yet — return empty array
             // Run: cd server && npx prisma generate
-            console.error('[feeRepository] studentFeeLedger unavailable:', err.message);
+            logger.error(`[feeRepository] studentFeeLedger unavailable: ${err.message}`);
             return [];
         }
     }
@@ -372,23 +407,13 @@ class FeeRepository {
                 const ledger = await tx.studentFeeLedger.findUnique({ where: { id: adjustment.ledgerId } });
                 if (!ledger) throw new Error('Ledger not found');
 
-                const newDiscount = ledger.totalDiscount + adjustment.amount;
-                const newPayable = ledger.totalPayable - adjustment.amount;
-                let newPending = ledger.totalPending - adjustment.amount;
-
-                let newStatus = ledger.status;
-                if (newPending <= 0) {
-                    newPending = 0;
-                    newStatus = 'PAID';
-                }
-
                 await tx.studentFeeLedger.update({
                     where: { id: ledger.id },
                     data: {
-                        totalDiscount: newDiscount,
-                        totalPayable: newPayable < 0 ? 0 : newPayable,
-                        totalPending: newPending,
-                        status: newStatus,
+                        totalDiscount: { increment: adjustment.amount },
+                        totalPayable: { decrement: adjustment.amount },
+                        totalPending: { decrement: adjustment.amount },
+                        status: (ledger.totalPending - adjustment.amount) <= 0 ? 'PAID' : ledger.status
                     },
                 });
             }
@@ -436,17 +461,13 @@ class FeeRepository {
             });
 
             if (ledger) {
-                const newPaid = ledger.totalPaid - parsedAmount;
-                const newPending = ledger.totalPayable - newPaid - ledger.totalDiscount;
-                const newStatus = newPaid >= ledger.totalPayable - ledger.totalDiscount ? 'PAID' : (newPaid > 0 ? 'PARTIALLY_PAID' : 'PENDING');
-
                 await tx.studentFeeLedger.update({
                     where: { id: ledger.id },
                     data: {
-                        totalPaid: newPaid < 0 ? 0 : newPaid,
-                        totalPending: newPending > 0 ? newPending : 0,
-                        status: newStatus,
-                    },
+                        totalPaid: { decrement: parsedAmount },
+                        totalPending: { increment: parsedAmount },
+                        status: 'PARTIALLY_PAID'
+                    }
                 });
             }
 
@@ -525,7 +546,7 @@ class FeeRepository {
                 },
             });
         } catch (err) {
-            console.error('[feeRepository] studentFeeLedger unavailable for stats:', err.message);
+            logger.error(`[feeRepository] studentFeeLedger unavailable for stats: ${err.message}`);
         }
 
         return [monthlyCollection, pendingTotal, topDefaulters];

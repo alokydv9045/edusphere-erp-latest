@@ -2,9 +2,37 @@
 
 const prisma = require('../config/database');
 const notifService = require('../notifications/notificationService');
+const notificationService = require('../services/NotificationService');
+const asyncHandler = require('../utils/asyncHandler');
 
-const NOTIF_ROLES = ['SUPER_ADMIN', 'ADMIN', 'NOTIFICATION_MANAGER'];
-const ADMIN_ONLY  = ['SUPER_ADMIN', 'ADMIN'];
+// ─────────────────────────────────────────────────────────────
+// In-app notifications (header bell)
+// ─────────────────────────────────────────────────────────────
+
+const getNotifications = asyncHandler(async (req, res) => {
+  const result = await notificationService.getNotifications(req.user.userId);
+  res.status(200).json({
+    success: true,
+    ...result,
+  });
+});
+
+const markAsRead = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  await notificationService.markAsRead(id, req.user.userId);
+  res.status(200).json({
+    success: true,
+    message: 'Notification marked as read',
+  });
+});
+
+const markAllRead = asyncHandler(async (req, res) => {
+  await notificationService.markAllRead(req.user.userId);
+  res.status(200).json({
+    success: true,
+    message: 'All notifications marked as read',
+  });
+});
 
 // ─────────────────────────────────────────────────────────────
 // Settings
@@ -94,10 +122,10 @@ const updateTemplate = async (req, res) => {
     const template = await prisma.notificationTemplate.update({
       where: { id },
       data: {
-        ...(templateName  !== undefined && { templateName }),
-        ...(messageBody   !== undefined && { messageBody }),
-        ...(variables     !== undefined && { variables }),
-        ...(isActive      !== undefined && { isActive }),
+        ...(templateName !== undefined && { templateName }),
+        ...(messageBody !== undefined && { messageBody }),
+        ...(variables !== undefined && { variables }),
+        ...(isActive !== undefined && { isActive }),
       },
     });
     res.json({ success: true, message: 'Template updated', template });
@@ -255,6 +283,9 @@ const retryFailed = async (req, res) => {
 };
 
 module.exports = {
+  getNotifications,
+  markAsRead,
+  markAllRead,
   getSettings,
   updateSettings,
   getTemplates,
@@ -266,6 +297,4 @@ module.exports = {
   getLogs,
   getDashboard,
   retryFailed,
-  NOTIF_ROLES,
-  ADMIN_ONLY,
 };

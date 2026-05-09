@@ -66,9 +66,9 @@ export default function ServicesPage() {
 
     if (!user) return null;
 
-    const pendingCount = requests.filter(r => r.status === 'PENDING').length;
-    const approvedCount = requests.filter(r => r.status === 'APPROVED').length;
-    const totalCount = requests.length;
+    const pendingCount = (requests || []).filter(r => r.status === 'PENDING').length;
+    const approvedCount = (requests || []).filter(r => r.status === 'APPROVED').length;
+    const totalCount = (requests || []).length;
 
     const getStatusBadgeVariant = (status: string) => {
         switch (status) {
@@ -153,7 +153,7 @@ export default function ServicesPage() {
                 <CardContent>
                     {loading ? (
                         <div className="py-12 flex justify-center text-muted-foreground">Loading requests...</div>
-                    ) : requests.length === 0 ? (
+                    ) : (requests || []).length === 0 ? (
                         <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
                             <div className="rounded-full bg-primary/10 p-6">
                                 <FileText className="h-8 w-8 text-primary" />
@@ -167,7 +167,7 @@ export default function ServicesPage() {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {requests.map((request) => (
+                            {(requests || []).map((request) => (
                                 <div key={request.id} className="flex items-start justify-between p-4 border rounded-lg">
                                     <div className="space-y-1">
                                         <div className="flex items-center space-x-2">

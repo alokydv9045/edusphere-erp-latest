@@ -39,6 +39,11 @@ const ROLE_CONFIG = [
         label: 'HR Manager',
         description: 'Manage employees, salaries, and payroll processing',
     },
+    {
+        value: 'TRANSPORT_MANAGER',
+        label: 'Transport Manager',
+        description: 'Manage transport vehicles, routes, drivers, and student assignments',
+    },
 ];
 
 export default function EditUserPage() {
@@ -194,7 +199,7 @@ export default function EditUserPage() {
     }
 
     if (error && !user) {
-        return <div className="p-4 text-red-500 bg-red-100 rounded-md">{error}</div>;
+        return <div className="p-4 text-red-500 bg-red-100 rounded-md">{typeof error === "string" ? error : JSON.stringify(error)}</div>;
     }
 
     return (
@@ -215,7 +220,7 @@ export default function EditUserPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {error && (
-                        <div className="p-3 bg-red-100 text-red-600 rounded-md text-sm">{error}</div>
+                        <div className="p-3 bg-red-100 text-red-600 rounded-md text-sm">{typeof error === "string" ? error : JSON.stringify(error)}</div>
                     )}
 
                     {/* Core Info */}

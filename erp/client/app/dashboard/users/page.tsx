@@ -182,7 +182,7 @@ export default function UsersPage() {
           ) : error ? (
             <div className="rounded-md bg-yellow-50 p-4 text-sm text-yellow-800">
               <p className="font-semibold">Note:</p>
-              <p>{error}</p>
+              <p>{typeof error === "string" ? error : JSON.stringify(error)}</p>
               <p className="mt-2">
                 Click "Register User" button above to add new users to the system.
               </p>

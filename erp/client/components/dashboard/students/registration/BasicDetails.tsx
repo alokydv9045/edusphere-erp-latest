@@ -25,10 +25,9 @@ import { Upload, X } from "lucide-react";
 
 interface BasicDetailsProps {
     form: UseFormReturn<StudentRegistrationValues>;
-    onNext: () => void;
 }
 
-export default function BasicDetails({ form, onNext }: BasicDetailsProps) {
+export default function BasicDetails({ form }: BasicDetailsProps) {
     const photo = form.watch("photo");
 
     const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -115,9 +114,23 @@ export default function BasicDetails({ form, onNext }: BasicDetailsProps) {
                         name="lastName"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Last Name <span className="text-red-500">*</span></FormLabel>
+                                <FormLabel>Last Name</FormLabel>
                                 <FormControl>
                                     <Input placeholder="Doe" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Email Address</FormLabel>
+                                <FormControl>
+                                    <Input type="email" placeholder="student@example.com" {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -228,10 +241,6 @@ export default function BasicDetails({ form, onNext }: BasicDetailsProps) {
                             </FormItem>
                         )}
                     />
-                </div>
-
-                <div className="flex justify-end">
-                    <Button type="button" onClick={onNext}>Next: Academic Details</Button>
                 </div>
             </CardContent>
         </Card>

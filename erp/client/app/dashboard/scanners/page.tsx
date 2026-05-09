@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Wifi, WifiOff, QrCode, MapPin, BarChart2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { scannerAPI } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -12,7 +13,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/auth-context';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+
 
 const SCANNER_TYPE_COLORS: Record<string, string> = {
     ENTRY: 'bg-green-100 text-green-700',
@@ -57,10 +58,8 @@ export default function ScannersPage() {
     }, []);
 
     const fetchScanners = () => {
-        const token = localStorage.getItem('auth_token');
         setLoading(true);
-        fetch(`${API}/scanners`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.json())
+        scannerAPI.getAll()
             .then(d => { if (d.success) setScanners(d.scanners); })
             .catch(() => toast.error('Failed to fetch scanners'))
             .finally(() => setLoading(false));
@@ -69,13 +68,7 @@ export default function ScannersPage() {
     const toggleActive = async (scanner: Scanner) => {
         try {
             setTogglingId(scanner.id);
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(`${API}/scanners/${scanner.id}`, {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isActive: !scanner.isActive }),
-            });
-            if (!res.ok) throw new Error();
+            await scannerAPI.update(scanner.id, { isActive: !scanner.isActive });
             setScanners(prev => prev.map(s => s.id === scanner.id ? { ...s, isActive: !s.isActive } : s));
             toast.success(`Scanner ${scanner.isActive ? 'deactivated' : 'activated'}`);
         } catch {

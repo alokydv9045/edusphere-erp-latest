@@ -38,7 +38,8 @@ const updateStudentSchema = createStudentSchema.partial().omit({
 const registerStudentSchema = z.object({
     // Basic Details
     firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
+    lastName: z.string().optional(),
+    email: z.string().email('Invalid email format').optional().or(z.literal('')),
     dateOfBirth: z.string().min(1, 'Date of birth is required'),
     gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
     bloodGroup: z.string().optional(),

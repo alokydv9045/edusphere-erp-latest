@@ -56,6 +56,12 @@ const ROLE_CONFIG = [
     description: 'Manage WhatsApp notifications, templates, bulk messaging, and delivery logs',
     color: 'bg-violet-100 text-violet-700 border-violet-200',
   },
+  {
+    value: 'TRANSPORT_MANAGER',
+    label: 'Transport Manager',
+    description: 'Manage transport vehicles, routes, drivers, and student assignments',
+    color: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  },
 ];
 
 export default function NewUserPage() {
@@ -150,9 +156,7 @@ export default function NewUserPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{typeof error === "string" ? error : JSON.stringify(error)}</div>
             )}
 
             {/* Personal Information */}

@@ -7,12 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { ArrowLeft, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function OverdueBooksPage() {
   const [overdueBooks, setOverdueBooks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<any>(null);
+  const { toast } = useToast();
+
+  const [returnForm, setReturnForm] = useState({
+    conditionOnReturn: 'GOOD',
+    remarks: '',
+  });
 
   useEffect(() => {
     fetchOverdueBooks();
@@ -30,21 +43,25 @@ export default function OverdueBooksPage() {
     }
   };
 
-  const handleReturn = async (issueId: string) => {
+  const handleReturnBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedIssue) return;
+
     try {
-      await libraryAPI.returnBook(issueId);
+      await libraryAPI.returnBook({
+        issueId: selectedIssue.id,
+        conditionOnReturn: returnForm.conditionOnReturn,
+        remarks: returnForm.remarks,
+      });
+      setIsReturnDialogOpen(false);
+      setReturnForm({ conditionOnReturn: 'GOOD', remarks: '' });
+      setSelectedIssue(null);
       fetchOverdueBooks();
+      toast({ title: 'Success', description: 'Book returned and fine processed' });
     } catch (err) {
       console.error('Failed to return book', err);
+      toast({ title: 'Error', description: 'Failed to process return', variant: 'destructive' });
     }
-  };
-
-  const calculateOverdueDays = (dueDate: string) => {
-    const due = new Date(dueDate);
-    const today = new Date();
-    const diffTime = today.getTime() - due.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
   };
 
   return (
@@ -59,21 +76,21 @@ export default function OverdueBooksPage() {
       </div>
 
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Overdue Books</h1>
-        <p className="text-muted-foreground">Books that are past their due date</p>
+        <h1 className="text-3xl font-bold tracking-tight">Overdue Management</h1>
+        <p className="text-muted-foreground">Monitor overdue returns and track penalty fines</p>
       </div>
 
       {/* Alert */}
-      <Card className="border-orange-200 bg-orange-50">
+      <Card className="border-red-200 bg-red-50/50">
         <CardContent className="pt-6">
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-5 w-5 text-orange-600" />
+            <AlertCircle className="h-5 w-5 text-red-600" />
             <div>
-              <p className="font-medium text-orange-900">
-                {overdueBooks.length} book{overdueBooks.length !== 1 ? 's are' : ' is'} overdue
+              <p className="font-medium text-red-900">
+                {overdueBooks.length} book{overdueBooks.length !== 1 ? 's are' : ' is'} critically overdue
               </p>
-              <p className="text-sm text-orange-700">
-                Please follow up with students to return these books
+              <p className="text-sm text-red-700">
+                Total pending fines: ₹{overdueBooks.reduce((acc, curr) => acc + (curr.fine || 0), 0)}
               </p>
             </div>
           </div>
@@ -83,8 +100,8 @@ export default function OverdueBooksPage() {
       {/* Overdue Books Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Overdue Book Issues</CardTitle>
-          <CardDescription>List of all overdue book returns</CardDescription>
+          <CardTitle>Delinquent Returns</CardTitle>
+          <CardDescription>Comprehensive list of books past their due date</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -92,15 +109,13 @@ export default function OverdueBooksPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : error ? (
-            <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{typeof error === "string" ? error : JSON.stringify(error)}</div>
           ) : overdueBooks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground" />
-              <p className="text-lg font-medium">No overdue books</p>
+              <CheckCircle2 className="mb-4 h-12 w-12 text-green-500 opacity-50" />
+              <p className="text-lg font-medium">All clear!</p>
               <p className="text-sm text-muted-foreground">
-                All books have been returned on time
+                No overdue books found in the system.
               </p>
             </div>
           ) : (
@@ -108,49 +123,81 @@ export default function OverdueBooksPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Book Title</TableHead>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Issued Date</TableHead>
+                    <TableHead>Book Details</TableHead>
+                    <TableHead>Borrower</TableHead>
                     <TableHead>Due Date</TableHead>
-                    <TableHead>Overdue Days</TableHead>
-                    <TableHead>Fine</TableHead>
+                    <TableHead>Days Past</TableHead>
+                    <TableHead>Estimated Fine</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {overdueBooks.map((issue) => {
-                    const overdueDays = calculateOverdueDays(issue.dueDate);
-                    const fine = overdueDays * 5; // ₹5 per day
-                    return (
-                      <TableRow key={issue.id}>
-                        <TableCell className="font-medium">{issue.book?.title || 'N/A'}</TableCell>
-                        <TableCell>
-                          {issue.student?.user?.firstName} {issue.student?.user?.lastName}
-                          <br />
-                          <span className="text-sm text-muted-foreground">
-                            {issue.student?.admissionNumber}
-                          </span>
-                        </TableCell>
-                        <TableCell>{new Date(issue.issueDate).toLocaleDateString()}</TableCell>
-                        <TableCell>{new Date(issue.dueDate).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <Badge className="bg-red-100 text-red-700">
-                            {overdueDays} day{overdueDays !== 1 ? 's' : ''}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium text-red-600">₹{fine}</TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleReturn(issue.id)}
-                          >
-                            Mark Returned
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {overdueBooks.map((issue) => (
+                    <TableRow key={issue.id}>
+                      <TableCell className="font-medium">
+                        <div>{issue.book?.title}</div>
+                        <div className="text-xs text-muted-foreground">ISBN: {issue.book?.isbn || 'N/A'}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-semibold">
+                          {issue.student ? `${issue.student.user?.firstName} ${issue.student.user?.lastName}` : 
+                           issue.teacher ? `${issue.teacher.user?.firstName} ${issue.teacher.user?.lastName}` : 'Unknown'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {issue.student ? `Admission: ${issue.student.admissionNumber}` : issue.teacher ? 'Staff' : ''}
+                        </div>
+                      </TableCell>
+                      <TableCell>{new Date(issue.dueDate).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Badge variant="destructive">
+                          {issue.overdueDays} day{issue.overdueDays !== 1 ? 's' : ''}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-bold text-red-600">₹{issue.fine}</TableCell>
+                      <TableCell className="text-right">
+                        <Dialog open={isReturnDialogOpen && selectedIssue?.id === issue.id} onOpenChange={(open) => {
+                          setIsReturnDialogOpen(open);
+                          if (!open) setSelectedIssue(null);
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => setSelectedIssue(issue)}>
+                              Process Return
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Finalize Return</DialogTitle>
+                              <DialogDescription>Assessing book condition and fine for "{issue.book?.title}"</DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleReturnBook} className="space-y-4 pt-4">
+                              <div className="bg-red-50 p-3 rounded-md mb-4 border border-red-100">
+                                <p className="text-sm font-semibold text-red-900">Calculated Fine: ₹{issue.fine}</p>
+                                <p className="text-xs text-red-700">Days overdue: {issue.overdueDays}</p>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Condition on Return</Label>
+                                <Select value={returnForm.conditionOnReturn} onValueChange={(v) => setReturnForm({ ...returnForm, conditionOnReturn: v })}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="NEW">New / Mint</SelectItem>
+                                    <SelectItem value="GOOD">Good / Used</SelectItem>
+                                    <SelectItem value="FAIR">Fair (Visible wear)</SelectItem>
+                                    <SelectItem value="POOR">Poor (Heavy wear)</SelectItem>
+                                    <SelectItem value="DAMAGED">Damaged / Missing pages</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Remarks</Label>
+                                <Input value={returnForm.remarks} onChange={(e) => setReturnForm({ ...returnForm, remarks: e.target.value })} placeholder="Internal notes..." />
+                              </div>
+                              <Button type="submit" className="w-full">Confirm Return & Close</Button>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>

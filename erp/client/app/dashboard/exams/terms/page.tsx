@@ -194,7 +194,7 @@ export default function TermsPage() {
                             <h2 className="text-xl font-bold">{editingId ? 'Edit Term' : 'Add New Term'}</h2>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            {error && <div className="text-sm text-red-500 bg-red-50 p-2 rounded">{error}</div>}
+                            {error && <div className="text-sm text-red-500 bg-red-50 p-2 rounded">{typeof error === "string" ? error : JSON.stringify(error)}</div>}
 
                             <div className="space-y-2">
                                 <Label>Term Name *</Label>

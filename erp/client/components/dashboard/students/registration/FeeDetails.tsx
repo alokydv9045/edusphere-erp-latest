@@ -20,8 +20,6 @@ import { Loader2, IndianRupee, ChevronDown, ChevronUp } from "lucide-react";
 
 interface FeeDetailsProps {
     form: UseFormReturn<StudentRegistrationValues>;
-    onNext: () => void;
-    onPrev: () => void;
 }
 
 interface FeeStructure {
@@ -52,7 +50,7 @@ const PAYMENT_MODES = [
     { value: "OTHER", label: "Other" },
 ];
 
-export default function FeeDetails({ form, onNext, onPrev }: FeeDetailsProps) {
+export default function FeeDetails({ form }: FeeDetailsProps) {
     const [structures, setStructures] = useState<FeeStructure[]>([]);
     const [loading, setLoading] = useState(false);
     const [showPayment, setShowPayment] = useState(false);
@@ -85,7 +83,16 @@ export default function FeeDetails({ form, onNext, onPrev }: FeeDetailsProps) {
                         merged.push(gs);
                     }
                 }
-                setStructures(merged.filter((s: FeeStructure) => s.isActive !== false));
+                const finalStructures = merged.filter((s: FeeStructure) => s.isActive !== false);
+                setStructures(finalStructures);
+                
+                // Auto-select ONLY fee structures that explicitly match the classId
+                // Do not auto-select global fee structures, let the user manually select them
+                const structureIds = finalStructures
+                    .filter((s: FeeStructure) => s.classId === classId)
+                    .map((s: FeeStructure) => s.id);
+                form.setValue("feeStructureIds", structureIds);
+
             } catch (error) {
                 console.error("Failed to fetch fee structures", error);
                 setStructures([]);
@@ -98,18 +105,19 @@ export default function FeeDetails({ form, onNext, onPrev }: FeeDetailsProps) {
 
     // Toggle selection of a fee structure
     const toggleStructure = (structureId: string) => {
-        const current = [...(selectedIds || [])];
-        const index = current.indexOf(structureId);
-        if (index > -1) {
-            current.splice(index, 1);
-            // Also remove discount
+        const current = form.watch("feeStructureIds") || [];
+        if (current.includes(structureId)) {
+            form.setValue(
+                "feeStructureIds",
+                current.filter((id) => id !== structureId)
+            );
+            // Clear discount when unselected
             const newDiscounts = { ...discounts };
             delete newDiscounts[structureId];
             form.setValue("feeDiscounts", newDiscounts);
         } else {
-            current.push(structureId);
+            form.setValue("feeStructureIds", [...current, structureId]);
         }
-        form.setValue("feeStructureIds", current);
     };
 
     // Update discount for a structure
@@ -186,11 +194,11 @@ export default function FeeDetails({ form, onNext, onPrev }: FeeDetailsProps) {
                             return (
                                 <div
                                     key={structure.id}
-                                    className={`border rounded-lg p-4 cursor-pointer transition-all ${isSelected
+                                    onClick={() => toggleStructure(structure.id)}
+                                    className={`border rounded-lg p-4 transition-all cursor-pointer ${isSelected
                                         ? "border-primary bg-primary/5 shadow-sm"
                                         : "border-border hover:border-primary/50"
                                         }`}
-                                    onClick={() => toggleStructure(structure.id)}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-start gap-3">
@@ -373,15 +381,6 @@ export default function FeeDetails({ form, onNext, onPrev }: FeeDetailsProps) {
                     </div>
                 )}
 
-                {/* Navigation Buttons */}
-                <div className="flex justify-between pt-2">
-                    <Button type="button" variant="outline" onClick={onPrev}>
-                        Previous
-                    </Button>
-                    <Button type="button" onClick={onNext}>
-                        Next: Review
-                    </Button>
-                </div>
             </CardContent>
         </Card>
     );

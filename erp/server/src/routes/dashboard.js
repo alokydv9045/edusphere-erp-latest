@@ -7,8 +7,17 @@ const {
   getUpcomingExams,
   getFeeCollectionSummary,
   getInventoryAlerts,
-  getAccountantStats
-} = require('../controllers/dashboardController');
+  getAccountantStats,
+  getAttendanceTrend,
+  getClassPerformance,
+  getStudentPerformance,
+  getLibraryStats,
+  getHRStats,
+  getFinanceStats,
+  getExamStats,
+  getInventoryStats,
+  getAdmissionStats
+} = require('../controllers/DashboardController');
 
 // All dashboard routes require authentication
 router.use(authMiddleware);
@@ -30,5 +39,18 @@ router.get('/inventory-alerts', getInventoryAlerts);
 
 // Accountant-specific detailed stats (requires ACCOUNTANT role)
 router.get('/accountant-stats', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), getAccountantStats);
+
+// Get attendance trend (Last 7 days)
+router.get('/attendance-trend', getAttendanceTrend);
+router.get('/class-performance', getClassPerformance);
+router.get('/student-performance', getStudentPerformance);
+
+// Phase 2: Premium Dashboard Routes
+router.get('/library-stats', getLibraryStats);
+router.get('/hr-stats', getHRStats);
+router.get('/finance-stats', getFinanceStats);
+router.get('/exam-stats', getExamStats);
+router.get('/inventory-stats', getInventoryStats);
+router.get('/admission-stats', getAdmissionStats);
 
 module.exports = router;

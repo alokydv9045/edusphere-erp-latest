@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Loader2, Eye, Calendar, Trash2, Lock, Unlock, Filter } from 'lucide-react';
+import { Search, Plus, Loader2, Eye, Calendar, Trash2, Lock, Unlock } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
 
 export default function ExamsPage() {
   const [exams, setExams] = useState<any[]>([]);
@@ -159,6 +160,30 @@ export default function ExamsPage() {
         </div>
       </div>
 
+      {/* Analytics Section */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <RealtimeChart
+          title="Subject Performance"
+          description="Average marks distribution across subjects"
+          endpoint="/dashboard/exam-stats"
+          socketEvent="EXAM_UPDATE"
+          type="radar"
+          dataKey="average"
+          xAxisKey="subject"
+          color="#ec4899"
+        />
+        <RealtimeChart
+          title="Average Score Trend"
+          description="Class average performance over time"
+          endpoint="/dashboard/exam-stats"
+          socketEvent="EXAM_UPDATE"
+          type="line"
+          dataKey="average"
+          xAxisKey="date"
+          color="#3b82f6"
+        />
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Examination Schedule</CardTitle>
@@ -233,9 +258,7 @@ export default function ExamsPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : error ? (
-            <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{typeof error === "string" ? error : JSON.stringify(error)}</div>
           ) : filteredExams.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />

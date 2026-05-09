@@ -8,6 +8,8 @@ const {
     updateEmployee,
     toggleEmployeeStatus,
 } = require('../controllers/hrController');
+const validate = require('../middleware/validate');
+const { hrCreateEmployeeSchema } = require('../validators/userValidator');
 const {
     initializeLeaveBalances,
     getMyBalances,
@@ -31,7 +33,7 @@ router.get('/', requireRole(...HR_ROLES), getEmployees);
 router.get('/:id', requireRole(...HR_ROLES), getEmployee);
 
 // Create new employee
-router.post('/', requireRole(...HR_ROLES), createEmployee);
+router.post('/', requireRole(...HR_ROLES), validate(hrCreateEmployeeSchema), createEmployee);
 
 // Update employee profile
 router.put('/:id', requireRole(...HR_ROLES), updateEmployee);

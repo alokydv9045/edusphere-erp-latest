@@ -19,10 +19,10 @@ function buildDatabaseUrl() {
     const url = new URL(rawUrl);
     // Only set defaults if not explicitly provided in the URL
     if (!url.searchParams.has('connection_limit')) {
-      url.searchParams.set('connection_limit', '3');
+      url.searchParams.set('connection_limit', '10');
     }
     if (!url.searchParams.has('pool_timeout')) {
-      url.searchParams.set('pool_timeout', '20');
+      url.searchParams.set('pool_timeout', '30');
     }
     return url.toString();
   } catch {

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Navigation, Save, QrCode, MapPin, BarChart2, Wifi, WifiOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { scannerAPI } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/auth-context';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+
 const SCANNER_TYPES = ['ENTRY', 'EXIT', 'CLASSROOM', 'LIBRARY', 'CANTEEN', 'EXAM_HALL', 'CUSTOM'];
 const ALL_ROLES = ['STUDENT', 'TEACHER', 'STAFF'];
 
@@ -74,15 +75,16 @@ export default function ScannerDetailPage() {
     const [longitude, setLongitude] = useState('');
     const [geofenceRadius, setGeofenceRadius] = useState('10');
 
-    const fetchData = useCallback(() => {
-        const token = localStorage.getItem('auth_token');
+    const fetchData = useCallback(async () => {
         setLoading(true);
-        Promise.all([
-            fetch(`${API}/scanners/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-            fetch(`${API}/scanners/${id}/stats`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        ]).then(([scannerData, statsData]) => {
-            if (scannerData.success) {
-                const s = scannerData.scanner;
+        try {
+            const [scannerRes, statsRes] = await Promise.all([
+                scannerAPI.getById(id),
+                scannerAPI.getStats(id),
+            ]);
+            
+            if (scannerRes.success) {
+                const s = scannerRes.scanner;
                 setScanner(s);
                 setName(s.name);
                 setLocation(s.location || '');
@@ -92,8 +94,13 @@ export default function ScannerDetailPage() {
                 if (s.latitude) setLatitude(String(s.latitude));
                 if (s.longitude) setLongitude(String(s.longitude));
             }
-            if (statsData.success) setStats(statsData.stats);
-        }).finally(() => setLoading(false));
+            if (statsRes.success) setStats(statsRes.stats);
+        } catch (err) {
+            console.error('Failed to fetch scanner data', err);
+            toast.error('Failed to load scanner details');
+        } finally {
+            setLoading(false);
+        }
     }, [id]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
@@ -118,18 +125,12 @@ export default function ScannerDetailPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(`${API}/scanners/${id}`, {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name, location, scannerType, allowedRoles,
-                    latitude: latitude ? parseFloat(latitude) : null,
-                    longitude: longitude ? parseFloat(longitude) : null,
-                    geofenceRadius: parseInt(geofenceRadius),
-                }),
+            await scannerAPI.update(id, {
+                name, location, scannerType, allowedRoles,
+                latitude: latitude ? parseFloat(latitude) : null,
+                longitude: longitude ? parseFloat(longitude) : null,
+                geofenceRadius: parseInt(geofenceRadius),
             });
-            if (!res.ok) throw new Error();
             toast.success('Scanner updated successfully');
         } catch {
             toast.error('Failed to save changes');
@@ -140,14 +141,13 @@ export default function ScannerDetailPage() {
 
     const toggleActive = async () => {
         if (!scanner) return;
-        const token = localStorage.getItem('auth_token');
-        await fetch(`${API}/scanners/${id}`, {
-            method: 'PUT',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isActive: !scanner.isActive }),
-        });
-        setScanner(prev => prev ? { ...prev, isActive: !prev.isActive } : prev);
-        toast.success(`Scanner ${scanner.isActive ? 'deactivated' : 'activated'}`);
+        try {
+            await scannerAPI.update(id, { isActive: !scanner.isActive });
+            setScanner(prev => prev ? { ...prev, isActive: !prev.isActive } : prev);
+            toast.success(`Scanner ${scanner.isActive ? 'deactivated' : 'activated'}`);
+        } catch {
+            toast.error('Failed to toggle status');
+        }
     };
 
     const getPersonName = (r: ScanRecord) => {

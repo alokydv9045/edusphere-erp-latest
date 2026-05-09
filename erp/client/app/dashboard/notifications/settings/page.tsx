@@ -3,15 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
-import { Settings, Save, RefreshCw } from 'lucide-react';
+import { Settings, Save, RefreshCw, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
-const ADMIN_ONLY = ['SUPER_ADMIN', 'ADMIN'];
+import apiClient from '@/lib/api/client';
 
-function getToken(): string {
-  return typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
-}
+const ADMIN_ONLY = ['SUPER_ADMIN', 'ADMIN'];
 
 interface SettingsData {
   attendanceNotificationTime: string;
@@ -45,9 +42,10 @@ export default function NotificationSettingsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/notifications/settings`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      const data = await res.json();
+      const { data } = await apiClient.get('/notifications/settings');
       if (data.settings) setForm(data.settings);
+    } catch (err: any) {
+      console.error('Failed to load settings:', err);
     } finally {
       setLoading(false);
     }
@@ -59,27 +57,18 @@ export default function NotificationSettingsPage() {
     if (!isAdmin) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API}/notifications/settings`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+      const { data } = await apiClient.put('/notifications/settings', form);
+      toast.success('Notification Settings', {
+        description: 'Settings saved successfully.',
+        duration: 3000,
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success('Notification Settings', {
-          description: 'Settings saved successfully.',
-          duration: 3000,
-        });
-        // Redirect back to the Notification Management hub
-        router.push('/dashboard/notifications');
-      } else {
-        toast.error('Failed to save settings', {
-          description: data.message || 'An unexpected error occurred.',
-          duration: 4000,
-        });
-      }
-    } catch {
-      toast.error('Network error', { description: 'Could not reach the server.', duration: 4000 });
+      // Redirect back to the Notification Management hub
+      router.push('/dashboard/notifications');
+    } catch (err: any) {
+      toast.error('Failed to save settings', {
+        description: err.response?.data?.message || 'An unexpected error occurred.',
+        duration: 4000,
+      });
     } finally {
       setSaving(false);
     }
@@ -92,7 +81,15 @@ export default function NotificationSettingsPage() {
   if (loading) return <div className="flex items-center justify-center h-40"><RefreshCw className="animate-spin h-6 w-6 text-primary" /></div>;
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="max-w-xl space-y-4">
+      <button
+        onClick={() => router.push('/dashboard/notifications')}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+
       <div className="flex items-center gap-2">
         <Settings className="h-5 w-5 text-primary" />
         <h1 className="text-xl font-bold">Notification Settings</h1>

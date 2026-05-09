@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useEffect, useCallback } from 'react';
 import { hrAPI, payrollAPI, attendanceAPI, serviceAPI, academicAPI, scannerAPI } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -16,12 +18,14 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
 import {
     CheckCircle, Clock, Calendar, UserCheck,
     FileText, UserX, UserPlus, Briefcase,
-    IndianRupee, ChevronLeft, ChevronRight, RefreshCw,
-    Download, FileSpreadsheet, Loader2, Users, Plus, Search, Edit
+    IndianRupee, ChevronLeft, ChevronRight, RefreshCw, Eye,
+    Download, FileSpreadsheet, Loader2, Users, Plus, Search, Edit, BarChart
 } from 'lucide-react';
+import { useSocket } from '@/hooks/useSocket';
 
 const selectCls =
     'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
@@ -45,7 +49,7 @@ const emptyForm = {
 };
 
 export default function HRManagementPage() {
-
+    const { socket } = useSocket();
     const {
         isAdmin, isSuperAdmin, isHRManager, isPrincipal, isHOD,
         canManageHR, canApproveLeaves, canConductReviews, canViewPayroll
@@ -85,6 +89,7 @@ export default function HRManagementPage() {
     const [attType, setAttType] = useState<'TEACHER' | 'STAFF'>('TEACHER');
     const [attList, setAttList] = useState<any[]>([]);
     const [isAttLoading, setIsAttLoading] = useState(false);
+    const [isAlreadyMarked, setIsAlreadyMarked] = useState(false);
 
     // ── Leaves ───────────────────────────────────────────────────────────
     const [leaves, setLeaves] = useState<any[]>([]);
@@ -94,7 +99,7 @@ export default function HRManagementPage() {
     const [processRemarks, setProcessRemarks] = useState('');
 
     // Derived: Staff on leave today
-    const onLeaveToday = leaves.filter(l => {
+    const onLeaveToday = (leaves || []).filter(l => {
         const d = new Date(attDate);
         return l.status === 'APPROVED' && new Date(l.startDate) <= d && new Date(l.endDate) >= d;
     });
@@ -119,7 +124,7 @@ export default function HRManagementPage() {
 
     const getLeavesForDay = (day: number) => {
         const d = new Date(viewYear, viewMonth - 1, day);
-        return leaves.filter(l =>
+        return (leaves || []).filter(l =>
             l.status === 'APPROVED' &&
             new Date(l.startDate) <= d &&
             new Date(l.endDate) >= d
@@ -281,7 +286,11 @@ export default function HRManagementPage() {
             toast.success(data.message || 'Payroll generated');
             fetchPayroll();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to generate payroll');
+            const errMsg = err?.response?.data?.message ||
+                (typeof err?.response?.data?.error === 'string' ? err?.response?.data?.error : null) ||
+                err?.message ||
+                "Failed to generate payroll";
+            toast.error(errMsg);
         } finally {
             setIsGenerating(false);
         }
@@ -299,22 +308,50 @@ export default function HRManagementPage() {
 
     // ── Attendance Handlers ──────────────────────────────────────────────
     const fetchStaffForAttendance = useCallback(async () => {
-        setIsAttLoading(true);
         try {
-            const data = await hrAPI.getEmployees({ type: attType, status: 'ACTIVE' });
-            const list = (data.employees || []).map((e: any) => ({
-                id: e.id,
-                name: `${e.firstName} ${e.lastName}`,
-                employeeId: getEmployeeId(e),
-                status: 'PRESENT' // Default
-            }));
+            setIsAttLoading(true);
+            setIsAlreadyMarked(false);
+
+            // Fetch active staff/teachers
+            const response = await hrAPI.getEmployees({ type: attType, status: 'ACTIVE' });
+            const employees = response.employees || [];
+
+            // Fetch existing attendance for this date
+            const attResponse = await attendanceAPI.getRecords({
+                date: attDate,
+                attendeeType: attType
+            });
+
+            const existingMap = new Map();
+            if (attResponse.attendance) {
+                attResponse.attendance.forEach((r: any) => {
+                    const existingRecord = r.attendance;
+                    const entityId = attType === 'TEACHER' ? existingRecord?.teacherId : existingRecord?.staffId;
+                    if (entityId) existingMap.set(entityId, existingRecord?.status);
+                });
+            }
+
+            const list = employees.map((e: any) => {
+                const existingStatus = existingMap.get(e.id);
+                return {
+                    id: e.id,
+                    name: `${e.firstName} ${e.lastName}`,
+                    employeeId: getEmployeeId(e),
+                    status: existingStatus || null
+                };
+            });
+
             setAttList(list);
-        } catch {
+            if (attResponse.isMarked || (attResponse.stats && attResponse.stats.marked > 0)) {
+                setIsAlreadyMarked(true);
+            }
+        } catch (error) {
+            console.error('Error fetching staff attendance:', error);
             toast.error('Failed to fetch staff list');
         } finally {
             setIsAttLoading(false);
         }
-    }, [attType]);
+    }, [attType, attDate]);
 
     useEffect(() => {
         fetchStaffForAttendance();
@@ -326,6 +363,17 @@ export default function HRManagementPage() {
 
     const submitAttendance = async () => {
         try {
+            // Validate all staff are marked
+            const unmarked = attList.filter(item => !item.status);
+            if (unmarked.length > 0) {
+                toast({
+                    title: 'Incomplete Attendance',
+                    description: `Please mark attendance for all ${unmarked.length} remaining staff members.`,
+                    variant: 'destructive',
+                });
+                return;
+            }
+
             setIsAttLoading(true);
             const payload = {
                 date: attDate,
@@ -337,6 +385,7 @@ export default function HRManagementPage() {
                 }))
             };
             await attendanceAPI.submitStaffAttendance(payload);
+            setIsAlreadyMarked(true);
             toast.success('Attendance submitted successfully');
         } catch (err: any) {
             toast.error(err?.response?.data?.error || 'Failed to submit attendance');
@@ -361,6 +410,35 @@ export default function HRManagementPage() {
     useEffect(() => {
         fetchLeaves();
     }, [fetchLeaves]);
+
+    useEffect(() => {
+        if (socket) {
+            const handlePayrollUpdate = () => {
+                // Refresh data on socket updates
+                fetchPayroll();
+            };
+            const handleEmployeeUpdate = () => {
+                fetchEmployees();
+            };
+            const handleAttendanceUpdate = () => {
+                fetchStaffForAttendance();
+            };
+
+            socket.on('PAYROLL_GENERATED', handlePayrollUpdate);
+            socket.on('PAYROLL_PAID', handlePayrollUpdate);
+            socket.on('PAYROLL_UPDATED', handlePayrollUpdate);
+            socket.on('HR_UPDATE', handleEmployeeUpdate);
+            socket.on('ATTENDANCE_MARKED', handleAttendanceUpdate);
+
+            return () => {
+                socket.off('PAYROLL_GENERATED', handlePayrollUpdate);
+                socket.off('PAYROLL_PAID', handlePayrollUpdate);
+                socket.off('PAYROLL_UPDATED', handlePayrollUpdate);
+                socket.off('HR_UPDATE', handleEmployeeUpdate);
+                socket.off('ATTENDANCE_MARKED', handleAttendanceUpdate);
+            };
+        }
+    }, [socket, fetchPayroll, fetchEmployees, fetchStaffForAttendance]);
 
     const processLeaveRequest = async (status: 'APPROVED' | 'REJECTED') => {
         if (!selectedLeave) return;
@@ -509,7 +587,48 @@ export default function HRManagementPage() {
                     <TabsTrigger value="payroll">
                         <IndianRupee className="mr-2 h-4 w-4" /> Payroll
                     </TabsTrigger>
+                    <TabsTrigger value="analytics">
+                        <BarChart className="mr-2 h-4 w-4" /> Analytics
+                    </TabsTrigger>
                 </TabsList>
+
+                {/* ── Analytics Tab ── */}
+                <TabsContent value="analytics" className="space-y-6">
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <RealtimeChart
+                            title="Staff Attendance Trend"
+                            description="Daily attendance percentage (last 7 days)"
+                            endpoint="/dashboard/hr-stats"
+                            socketEvent="HR_UPDATE"
+                            type="area"
+                            dataKey="percentage"
+                            xAxisKey="day"
+                            color="#8b5cf6"
+                        />
+                        <RealtimeChart
+                            title="Leave Type Distribution"
+                            description="Breakdown of recent leave requests"
+                            endpoint="/dashboard/hr-stats"
+                            socketEvent="LEAVE_UPDATE"
+                            type="pie"
+                            dataKey="value"
+                            xAxisKey="name"
+                            colors={["#8b5cf6", "#ec4899", "#f59e0b", "#10b981"]}
+                        />
+                    </div>
+                    <div className="grid gap-6 md:grid-cols-1">
+                         <RealtimeChart
+                            title="Staff Count by Role"
+                            description="Teacher vs non-teaching staff distribution"
+                            endpoint="/dashboard/hr-stats"
+                            socketEvent="HR_UPDATE"
+                            type="bar"
+                            dataKey="count"
+                            xAxisKey="role"
+                            color="#3b82f6"
+                        />
+                    </div>
+                </TabsContent>
 
                 {/* ── Employees Tab ── */}
                 <TabsContent value="employees" className="space-y-4">
@@ -620,6 +739,11 @@ export default function HRManagementPage() {
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex items-center justify-end gap-1">
+                                                            <Button variant="ghost" size="sm" asChild title="View Profile">
+                                                                <Link href={`/dashboard/users/${emp.userId || emp.id}`}>
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Link>
+                                                            </Button>
                                                             {canManageHR && (
                                                                 <>
                                                                     <Button variant="ghost" size="sm" onClick={() => openEdit(emp)} title="Edit">
@@ -687,15 +811,27 @@ export default function HRManagementPage() {
                                     <CardDescription>Mark attendance for teachers and staff</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Input type="date" value={attDate} onChange={e => setAttDate(e.target.value)} className="w-40" />
-                                    <select className={`${selectCls} w-32`} value={attType} onChange={e => setAttType(e.target.value as any)}>
+                                    <Input type="date" value={attDate} onChange={e => setAttDate(e.target.value)} className="w-40" disabled={isAttLoading} />
+                                    <select
+                                        className={`${selectCls} w-32`}
+                                        value={attType}
+                                        onChange={e => setAttType(e.target.value as any)}
+                                        disabled={isAttLoading}
+                                    >
                                         <option value="TEACHER">Teachers</option>
                                         <option value="STAFF">Staff</option>
                                     </select>
-                                    <Button onClick={submitAttendance} disabled={isAttLoading}>
-                                        {isAttLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />}
-                                        Save Attendance
-                                    </Button>
+                                    {isAlreadyMarked ? (
+                                        <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-200">
+                                            <CheckCircle className="h-4 w-4" />
+                                            <span className="text-xs font-semibold">SUBMITTED</span>
+                                        </div>
+                                    ) : (
+                                        <Button onClick={submitAttendance} disabled={isAttLoading || attList.length === 0}>
+                                            {isAttLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />}
+                                            Save Attendance
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </CardHeader>
@@ -711,8 +847,11 @@ export default function HRManagementPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {attList.map(item => (
-                                            <TableRow key={item.id}>
-                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                            <TableRow key={item.id} className={!item.status ? 'bg-amber-50/20' : ''}>
+                                                <TableCell className="font-medium">
+                                                    {item.name}
+                                                    {!item.status && <span className="ml-2 text-[10px] text-amber-600 font-medium italic">* Mark Required</span>}
+                                                </TableCell>
                                                 <TableCell className="text-sm font-mono">{item.employeeId}</TableCell>
                                                 <TableCell>
                                                     <div className="flex gap-2">
@@ -721,8 +860,9 @@ export default function HRManagementPage() {
                                                                 key={s}
                                                                 size="sm"
                                                                 variant={item.status === s ? 'default' : 'outline'}
-                                                                className={item.status === s ? (s === 'PRESENT' ? 'bg-green-600' : s === 'ABSENT' ? 'bg-red-600' : 'bg-amber-600') : ''}
-                                                                onClick={() => handleAttendanceChange(item.id, s)}
+                                                                className={item.status === s ? (s === 'PRESENT' ? 'bg-green-600 hover:bg-green-700' : s === 'ABSENT' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700') : 'hover:bg-muted'}
+                                                                onClick={() => !isAlreadyMarked && handleAttendanceChange(item.id, s)}
+                                                                disabled={isAlreadyMarked}
                                                             >
                                                                 {s}
                                                             </Button>

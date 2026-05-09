@@ -13,7 +13,9 @@ const {
   approveAdjustment,
   processRefund,
   getAdjustments,
-  getFeeStats
+  getFeeStats,
+  getClassWiseReport,
+  downloadFeeStatement
 } = require('../controllers/feeController');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 
@@ -30,6 +32,9 @@ const {
 const router = express.Router();
 
 router.use(authMiddleware);
+
+// Reports
+router.get('/reports/class-wise', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), getClassWiseReport);
 
 // Fee structures
 router.get('/structures', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), getFeeStructures);
@@ -56,5 +61,6 @@ router.post('/refunds', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), valid
 
 // Student fee status/ledger
 router.get('/students/:id/status', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'STUDENT', 'PARENT'), getStudentFeeStatus);
+router.get('/students/:id/statement', requireRole('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'STUDENT', 'PARENT'), downloadFeeStatement);
 
 module.exports = router;

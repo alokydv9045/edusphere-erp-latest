@@ -15,11 +15,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PreviousSchoolDetailsProps {
     form: UseFormReturn<StudentRegistrationValues>;
-    onNext?: () => void;
-    onPrev?: () => void;
 }
 
-export default function PreviousSchoolDetails({ form, onNext, onPrev }: PreviousSchoolDetailsProps) {
+export default function PreviousSchoolDetails({ form }: PreviousSchoolDetailsProps) {
     const admissionType = form.watch("admissionType");
 
     if (admissionType !== "TRANSFER") {
@@ -100,10 +98,6 @@ export default function PreviousSchoolDetails({ form, onNext, onPrev }: Previous
                     />
                 </div>
 
-                <div className="flex justify-between">
-                    {onPrev && <Button type="button" variant="outline" onClick={onPrev}>Previous</Button>}
-                    {onNext && <Button type="button" onClick={onNext}>Next: Parents</Button>}
-                </div>
             </CardContent>
         </Card>
     );

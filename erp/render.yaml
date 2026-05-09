@@ -1,0 +1,72 @@
+services:
+  # ── EduSphere Backend API ──────────────────────────────────────────────────
+  - type: web
+    name: edusphere-api
+    env: node
+    plan: free # or starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    rootDir: server
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: edusphere-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: edusphere-cache
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        fromService:
+          type: web
+          name: edusphere-client
+          property: url
+      # School Identity
+      - key: SCHOOL_ID
+        sync: false
+      - key: SCHOOL_NAME
+        sync: false
+      # Cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+  # ── EduSphere Frontend Client ──────────────────────────────────────────────
+  - type: web
+    name: edusphere-client
+    env: node
+    plan: free # or starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    rootDir: client
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: edusphere-api
+          property: url
+          suffix: /api
+      - key: PORT
+        value: 3000
+
+# ── Databases & Infrastructure ────────────────────────────────────────────────
+databases:
+  - name: edusphere-db
+    plan: free # or standard
+
+redis:
+  - name: edusphere-cache
+    plan: free # or standard
+    ipAllowList: [] # Allow internal access only

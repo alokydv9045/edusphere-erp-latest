@@ -8,11 +8,65 @@ class StudentService {
     /**
      * Get paginated and filtered students
      */
-    async getStudents(filters) {
+    async getStudents(filters, userContext) {
         const { classId, sectionId, status, search, page = 1, limit = 25 } = filters;
 
         const where = {};
-        if (classId) where.currentClassId = classId;
+        
+        // Role-based filtering for teachers
+        if (userContext && userContext.role === 'TEACHER') {
+            const teacher = await prisma.teacher.findUnique({
+                where: { userId: userContext.userId },
+                include: {
+                    subjects: {
+                        include: { subject: true }
+                    }
+                }
+            });
+
+            if (teacher) {
+                const assignedClassIds = new Set();
+                
+                // 1. Classes where they are the Class Teacher
+                const classTeacherClasses = await prisma.class.findMany({
+                    where: { classTeacherId: teacher.id },
+                    select: { id: true }
+                });
+                classTeacherClasses.forEach(c => assignedClassIds.add(c.id));
+
+                // 2. Classes where they teach a subject
+                teacher.subjects.forEach(st => {
+                    if (st.subject && st.subject.classId) {
+                        assignedClassIds.add(st.subject.classId);
+                    }
+                });
+
+                const assignedClassIdsArray = Array.from(assignedClassIds);
+
+                // If a specific classId is requested, ensure it's in assignments
+                if (classId) {
+                    if (assignedClassIds.has(classId)) {
+                        where.currentClassId = classId;
+                    } else {
+                        // Forbidden class requested - force empty result
+                        where.currentClassId = 'none';
+                    }
+                } else {
+                    // Default to all assigned classes
+                    if (assignedClassIdsArray.length === 0) {
+                        where.currentClassId = 'none';
+                    } else {
+                        where.currentClassId = { in: assignedClassIdsArray };
+                    }
+                }
+            } else {
+                where.currentClassId = 'none';
+            }
+        } else {
+            // Admin/Other roles can filter freely
+            if (classId) where.currentClassId = classId;
+        }
+
         if (sectionId) where.sectionId = sectionId;
         if (status) where.status = status;
 
@@ -196,9 +250,69 @@ class StudentService {
             halfDay: enrichedAttendance.filter((a) => a.status === 'HALF_DAY').length,
         };
 
-        stats.percentage = stats.total > 0 ? ((stats.present / stats.total) * 100).toFixed(2) : 0;
+        stats.percentage = stats.total > 0 ? Number((((stats.present + stats.late) / stats.total) * 100).toFixed(2)) : 0;
 
-        return { attendance: enrichedAttendance, stats };
+        // 4. Calculate Streak (Presence Streak)
+        let currentStreak = 0;
+        const sortedAttendance = [...enrichedAttendance].sort((a, b) => new Date(b.date) - new Date(a.date));
+        for (const record of sortedAttendance) {
+            if (record.status === 'PRESENT' || record.status === 'LATE') {
+                currentStreak++;
+            } else if (record.status === 'ABSENT') {
+                break;
+            }
+            // Skip other statuses or count them as gaps? Usually only consecutive presence counts.
+        }
+        stats.currentStreak = currentStreak;
+
+        // 5. Calculate Subject-wise stats
+        const subjectWise = {};
+        enrichedAttendance.forEach(a => {
+            if (a.subjectId) {
+                if (!subjectWise[a.subjectId]) {
+                    subjectWise[a.subjectId] = {
+                        name: a.subject?.name || 'Unknown Subject',
+                        total: 0,
+                        present: 0,
+                        absent: 0,
+                        late: 0
+                    };
+                }
+                const s = subjectWise[a.subjectId];
+                s.total++;
+                if (a.status === 'PRESENT') s.present++;
+                else if (a.status === 'ABSENT') s.absent++;
+                else if (a.status === 'LATE') s.late++;
+                
+                s.percentage = s.total > 0 ? (((s.present + s.late) / s.total) * 100).toFixed(1) : 0;
+            }
+        });
+
+        // 6. Monthly Comparison (Current month vs Last month)
+        const now = new Date();
+        const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+        const thisMonthRecords = enrichedAttendance.filter(a => new Date(a.date) >= firstDayThisMonth);
+        const lastMonthRecords = enrichedAttendance.filter(a => new Date(a.date) >= firstDayLastMonth && new Date(a.date) <= lastDayLastMonth);
+
+        const calcPct = (recs) => {
+            if (recs.length === 0) return 0;
+            const p = recs.filter(r => r.status === 'PRESENT' || r.status === 'LATE').length;
+            return (p / recs.length) * 100;
+        };
+
+        const thisMonthPct = calcPct(thisMonthRecords);
+        const lastMonthPct = calcPct(lastMonthRecords);
+        
+        stats.monthlyDelta = lastMonthPct > 0 ? (thisMonthPct - lastMonthPct).toFixed(1) : thisMonthPct.toFixed(1);
+
+        return { 
+            attendance: enrichedAttendance, 
+            stats,
+            subjectWise: Object.values(subjectWise)
+        };
     }
 
     /**
@@ -217,7 +331,7 @@ class StudentService {
         const rollNumber = (studentCount + 1).toString();
 
         // 3. Generate Admission Number
-        const admissionNumber = `ADM${Date.now()}`;
+        const admissionNumber = `ADM${Date.now()}${Math.floor(100 + Math.random() * 899)}`;
 
         // Validate essential relations before starting Transaction to fail fast
         const [cls, section, yearRecord] = await Promise.all([
@@ -271,11 +385,11 @@ class StudentService {
             // C. Create User Login
             const user = await tx.user.create({
                 data: {
-                    email: `${username}@school.com`, // Dummy email fallback
+                    email: data.email || `${username}@school.com`, 
                     username: username,
                     password: hashedPassword,
                     firstName: data.firstName,
-                    lastName: data.lastName,
+                    lastName: data.lastName || '',
                     dateOfBirth: new Date(data.dateOfBirth),
                     gender: data.gender,
                     bloodGroup: data.bloodGroup,
@@ -317,7 +431,7 @@ class StudentService {
                     parents: {
                         create: [
                             { parentId: father.id, relationship: 'FATHER' },
-                            ...(mother ? [{ parentId: mother.id, relationship: 'MOTHER' }] : [])
+                            ...(mother && mother.id !== father.id ? [{ parentId: mother.id, relationship: 'MOTHER' }] : [])
                         ]
                     }
                 }
@@ -339,6 +453,8 @@ class StudentService {
 
             // F. Process Fee Assignment & Initial Payment
             let feePayments = [];
+            let remainingInitialPayment = data.initialPayment?.amount || 0;
+
             if (data.feeStructureIds && data.feeStructureIds.length > 0) {
                 const receiptBase = `REC${Date.now()}`;
 
@@ -362,17 +478,14 @@ class StudentService {
                             }
                         });
 
-                        // Make initial payment if one was provided and totalPayable > 0
-                        const requestedAmount = data.initialPayment?.amount || 0;
-                        if (requestedAmount > 0 && totalPayable > 0) {
-                            // Clamp: never allow paying more than what is owed
-                            const paymentAmount = Math.min(requestedAmount, totalPayable);
-                            const remainingBalance = totalPayable - paymentAmount;
-                            const isPaidInFull = remainingBalance === 0;
+                        // Apply a portion of the initial payment if balance remains
+                        if (remainingInitialPayment > 0 && totalPayable > 0) {
+                            const paymentAmount = Math.min(remainingInitialPayment, totalPayable);
+                            const remainingBalanceForLedger = totalPayable - paymentAmount;
 
                             const payment = await tx.feePayment.create({
                                 data: {
-                                    receiptNumber: `${receiptBase}-${structureId.slice(0, 6)}`,
+                                    receiptNumber: `${receiptBase}-${structureId.slice(0, 4)}-${Math.floor(Math.random() * 1000)}`,
                                     studentId: student.id,
                                     feeStructureId: structureId,
                                     ledgerId: ledger.id,
@@ -389,18 +502,18 @@ class StudentService {
                                 },
                             });
 
-                            // Update ledger to reflect the admission payment
+                            // Update ledger to reflect the payment
                             await tx.studentFeeLedger.update({
                                 where: { id: ledger.id },
                                 data: {
                                     totalPaid: paymentAmount,
-                                    totalPending: remainingBalance,
-                                    // PAID if fully settled, PARTIAL if balance remains
-                                    status: isPaidInFull ? 'PAID' : 'PARTIAL'
+                                    totalPending: remainingBalanceForLedger,
+                                    status: remainingBalanceForLedger <= 0 ? 'PAID' : 'PARTIAL'
                                 }
                             });
 
                             feePayments.push(payment);
+                            remainingInitialPayment -= paymentAmount;
                         }
                     }
                 }

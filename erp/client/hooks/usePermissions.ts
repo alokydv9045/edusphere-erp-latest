@@ -18,6 +18,27 @@ export function usePermissions() {
     const isAdmissionManager = roles.includes('ADMISSION_MANAGER');
     const isPrincipal = roles.includes('PRINCIPAL');
     const isHOD = roles.includes('HOD');
+    const isTransportManager = roles.includes('TRANSPORT_MANAGER');
+
+    // Simple static mapping for granular permissions (matching backend middleware)
+    const PERMISSION_ROLES: Record<string, string[]> = {
+        'transport.view': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'ADMISSION_MANAGER'],
+        'transport.vehicle.create': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'],
+        'transport.vehicle.update': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'],
+        'transport.vehicle.delete': ['SUPER_ADMIN', 'ADMIN'],
+        'transport.route.create': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'],
+        'transport.route.update': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'],
+        'transport.assign.student': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'ADMISSION_MANAGER'],
+        'transport.manage.drivers': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'],
+        'transport.view.reports': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'ACCOUNTANT'],
+        'transport.send.notifications': ['SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'NOTIFICATION_MANAGER'],
+    };
+
+    const hasPermission = (permission: string) => {
+        const allowedRoles = PERMISSION_ROLES[permission];
+        if (!allowedRoles) return false;
+        return roles.some(r => allowedRoles.includes(r));
+    };
 
     return {
         // ── Role identity ──
@@ -25,6 +46,7 @@ export function usePermissions() {
         isAdmin,
         isTeacher,
         isStudent: roles.includes('STUDENT'),
+        isParent: roles.includes('PARENT'),
         isLibrarian: roles.includes('LIBRARIAN'),
         isAccountant,
         isHRManager,
@@ -83,6 +105,11 @@ export function usePermissions() {
         canApproveLeaves: isAdmin || isHRManager || isPrincipal || isHOD,
         canConductReviews: isAdmin || isPrincipal,
         canViewPayroll: roles.some(r => [...ADMIN_ROLES, 'ACCOUNTANT', 'HR_MANAGER'].includes(r)),
+
+        // ── Transport Management ──
+        isTransportManager,
+        canManageTransport: isAdmin || isTransportManager,
+        hasPermission,
 
         // Raw roles for custom checks
         roles,

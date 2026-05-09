@@ -42,7 +42,7 @@ export default function MarksEntryPage() {
         return (
             <div className="rounded-md bg-destructive/10 p-4 text-destructive flex items-center gap-3">
                 <AlertCircle className="h-5 w-5" />
-                <p>{error}</p>
+                <p>{typeof error === "string" ? error : JSON.stringify(error)}</p>
             </div>
         );
     }

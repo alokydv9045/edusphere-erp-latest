@@ -2,6 +2,8 @@ const prisma = require('../config/database');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const asyncHandler = require('../utils/asyncHandler');
+const logger = require('../config/logger');
 
 // Configure multer for logo uploads
 const logoDir = path.join(__dirname, '../../uploads/logo');
@@ -35,94 +37,110 @@ const upload = multer({
  * Get all school config key-value pairs
  * GET /api/school-config
  */
-const getConfig = async (req, res) => {
-    try {
-        const configs = await prisma.schoolBranding.findMany();
+const getConfig = asyncHandler(async (req, res) => {
+    const configs = await prisma.schoolBranding.findMany();
 
-        // Also include school name from env as fallback
-        const configMap = {};
-        configs.forEach((c) => {
-            configMap[c.key] = c.value;
-        });
+    // Also include school name from env as fallback
+    const configMap = {};
+    configs.forEach((c) => {
+        configMap[c.key] = c.value;
+    });
 
-        if (!configMap.school_name) {
-            configMap.school_name = process.env.SCHOOL_NAME || 'EduSphere School';
-        }
-
-        res.json({ config: configMap });
-    } catch (error) {
-        console.error('Get school config error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    if (!configMap.school_name) {
+        configMap.school_name = process.env.SCHOOL_NAME || '';
     }
-};
+
+    res.status(200).json({ 
+        success: true,
+        config: configMap 
+    });
+});
 
 /**
  * Upload school logo
  * POST /api/school-config/logo
  */
-const uploadLogo = async (req, res) => {
-    upload(req, res, async (err) => {
-        try {
+const uploadLogo = asyncHandler(async (req, res) => {
+    return new Promise((resolve, reject) => {
+        upload(req, res, async (err) => {
             if (err) {
-                return res.status(400).json({ error: err.message });
+                return res.status(400).json({ 
+                    success: false,
+                    message: err.message 
+                });
             }
-            if (!req.file) {
-                return res.status(400).json({ error: 'No file uploaded' });
-            }
-
-            // Store relative path for serving via static middleware
-            const logoPath = `/uploads/logo/${req.file.filename}`;
-
-            // Upsert the school_logo config
-            await prisma.schoolBranding.upsert({
-                where: { key: 'school_logo' },
-                create: { key: 'school_logo', value: logoPath },
-                update: { value: logoPath },
-            });
-
-            // Clean up old logos (keep only the latest)
-            const files = fs.readdirSync(logoDir);
-            files.forEach((file) => {
-                if (file !== req.file.filename) {
-                    fs.unlinkSync(path.join(logoDir, file));
+            
+            try {
+                if (!req.file) {
+                    return res.status(400).json({ 
+                        success: false,
+                        message: 'No file uploaded' 
+                    });
                 }
-            });
 
-            res.json({
-                message: 'Logo uploaded successfully',
-                logoUrl: logoPath,
-            });
-        } catch (error) {
-            console.error('Upload logo error:', error);
-            res.status(500).json({ error: 'Failed to upload logo' });
-        }
+                // Store relative path for serving via static middleware
+                const logoPath = `/uploads/logo/${req.file.filename}`;
+
+                // Upsert the school_logo config
+                await prisma.schoolBranding.upsert({
+                    where: { key: 'school_logo' },
+                    create: { key: 'school_logo', value: logoPath },
+                    update: { value: logoPath },
+                });
+
+                // Clean up old logos (keep only the latest)
+                const files = fs.readdirSync(logoDir);
+                files.forEach((file) => {
+                    if (file !== req.file.filename) {
+                        const oldPath = path.join(logoDir, file);
+                        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+                    }
+                });
+
+                res.status(200).json({
+                    success: true,
+                    message: 'Logo uploaded successfully',
+                    logoUrl: logoPath,
+                });
+                resolve();
+            } catch (error) {
+                logger.error('Upload logo error:', error);
+                res.status(500).json({ 
+                    success: false,
+                    message: 'Failed to upload logo' 
+                });
+                resolve();
+            }
+        });
     });
-};
+});
 
 /**
  * Update a school config key-value pair
  * PUT /api/school-config
  * Body: { key, value }
  */
-const updateConfig = async (req, res) => {
-    try {
-        const { key, value } = req.body;
+const updateConfig = asyncHandler(async (req, res) => {
+    const { key, value } = req.body;
 
-        if (!key || value === undefined) {
-            return res.status(400).json({ error: 'key and value are required' });
-        }
-
-        const config = await prisma.schoolBranding.upsert({
-            where: { key },
-            create: { key, value: String(value) },
-            update: { value: String(value) },
+    if (!key || value === undefined) {
+        return res.status(400).json({ 
+            success: false,
+            message: 'key and value are required' 
         });
-
-        res.json({ message: 'Config updated', config });
-    } catch (error) {
-        console.error('Update config error:', error);
-        res.status(500).json({ error: 'Internal server error' });
     }
-};
+
+    const config = await prisma.schoolBranding.upsert({
+        where: { key },
+        create: { key, value: String(value) },
+        update: { value: String(value) },
+    });
+
+    res.status(200).json({ 
+        success: true,
+        message: 'Config updated', 
+        config 
+    });
+});
 
 module.exports = { getConfig, uploadLogo, updateConfig };

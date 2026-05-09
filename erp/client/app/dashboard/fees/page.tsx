@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Loader2, IndianRupee, Receipt, TrendingUp, Search, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, Loader2, IndianRupee, Receipt, TrendingUp, Search, Eye, Edit, Trash2, PieChart } from 'lucide-react';
+import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/auth-context';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar } from 'recharts';
@@ -61,6 +62,33 @@ export default function FeesPage() {
   const [selectedStructure, setSelectedStructure] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [payingLedgerId, setPayingLedgerId] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const [reportFilters, setReportFilters] = useState({
+    classId: 'all',
+    sectionId: 'all',
+    month: 'all',
+  });
+  const [classReports, setClassReports] = useState<any[]>([]);
+  const [isReportsLoading, setIsReportsLoading] = useState(false);
+
+  const fetchReportData = useCallback(async () => {
+    setIsReportsLoading(true);
+    try {
+      const params: any = { limit: 1000 };
+      if (reportFilters.classId !== 'all') params.classId = reportFilters.classId;
+      if (reportFilters.sectionId !== 'all') params.sectionId = reportFilters.sectionId;
+      if (reportFilters.month !== 'all') params.month = reportFilters.month;
+
+      const res = await feeAPI.getClassWiseReport(params);
+      setClassReports(res.report || []);
+    } catch (err) {
+      console.error('Failed to fetch report data', err);
+      toast.error('Failed to load report data');
+    } finally {
+      setIsReportsLoading(false);
+    }
+  }, [reportFilters.classId, reportFilters.sectionId, reportFilters.month]);
 
   const { canManageFeeStructures, canCollectFees, canRegisterStudents, isStudent } = usePermissions();
   const { user } = useAuth();
@@ -168,6 +196,12 @@ export default function FeesPage() {
     }
   }, [isStudent, fetchStudents]);
 
+  useEffect(() => {
+    if (!isStudent) {
+      fetchReportData();
+    }
+  }, [isStudent, fetchReportData]);
+
   const handleCreateStructure = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -270,7 +304,7 @@ export default function FeesPage() {
         key: order.razorpayKeyId,
         amount: order.amountInPaise,
         currency: order.currency,
-        name: 'School Fee Payment',
+        name: `${process.env.NEXT_PUBLIC_SCHOOL_NAME || 'School'} Fee Payment`,
         description: `${order.feeType}`,
         order_id: order.orderId,
         prefill: {
@@ -293,7 +327,7 @@ export default function FeesPage() {
           }
         },
         theme: {
-          color: '#2563EB',
+          color: process.env.NEXT_PUBLIC_BRAND_COLOR || '#2563EB',
         },
       };
 
@@ -304,9 +338,30 @@ export default function FeesPage() {
       });
       rzp.open();
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || 'Failed to initiate payment');
+      const errorMsg = error?.response?.data?.message || error?.response?.data?.error || 'Failed to initiate payment';
+      toast.error(typeof errorMsg === 'string' ? errorMsg : 'Failed to initiate payment');
     } finally {
       setPayingLedgerId(null);
+    }
+  };
+
+  const handleDownloadStatement = async () => {
+    setIsDownloading(true);
+    try {
+      const blob = await feeAPI.downloadStatement('me');
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `FeeStatement_${user?.firstName || 'Student'}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      toast.success('Statement downloaded successfully');
+    } catch (err) {
+      console.error('Failed to download statement', err);
+      toast.error('Failed to download statement');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -494,7 +549,17 @@ export default function FeesPage() {
                   <p className="text-sm">No transaction history</p>
                 </div>
               )}
-              <Button variant="ghost" className="w-full text-xs h-8 text-blue-600" disabled>
+              <Button 
+                variant="ghost" 
+                className="w-full text-xs h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" 
+                onClick={handleDownloadStatement}
+                disabled={isDownloading}
+              >
+                {isDownloading ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                ) : (
+                  <Receipt className="h-3 w-3 mr-2" />
+                )}
                 Download Statement (PDF)
               </Button>
             </CardContent>
@@ -711,7 +776,7 @@ export default function FeesPage() {
                               <Select
                                 value={head.headName}
                                 onValueChange={(val) => {
-                                  let newHeads = [...structureForm.feeHeads];
+                                  const newHeads = [...structureForm.feeHeads];
                                   newHeads[index].headName = val;
                                   setStructureForm({ ...structureForm, feeHeads: newHeads });
                                 }}
@@ -732,7 +797,7 @@ export default function FeesPage() {
                                 placeholder="Amount"
                                 value={head.amount}
                                 onChange={(e) => {
-                                  let newHeads = [...structureForm.feeHeads];
+                                  const newHeads = [...structureForm.feeHeads];
                                   newHeads[index].amount = e.target.value;
                                   setStructureForm({ ...structureForm, feeHeads: newHeads });
                                 }}
@@ -978,14 +1043,14 @@ export default function FeesPage() {
         </TabsContent>
 
         {/* ── Reports Tab ── */}
-        <TabsContent value="reports" className="space-y-4">
+        <TabsContent value="reports" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center">
                   <p className="text-sm font-medium text-muted-foreground">Total Collected</p>
                   <p className="text-3xl font-bold text-green-600">
-                    ₹{stats.summary.totalCollected.toLocaleString()}
+                    ₹{stats.summary?.totalCollected?.toLocaleString() || '0'}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">This month</p>
                 </div>
@@ -996,7 +1061,7 @@ export default function FeesPage() {
                 <div className="text-center">
                   <p className="text-sm font-medium text-muted-foreground">Pending</p>
                   <p className="text-3xl font-bold text-orange-600">
-                    ₹{stats.summary.pending.toLocaleString()}
+                    ₹{stats.summary?.pending?.toLocaleString() || '0'}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">Due this month</p>
                 </div>
@@ -1006,65 +1071,35 @@ export default function FeesPage() {
               <CardContent className="pt-6">
                 <div className="text-center">
                   <p className="text-sm font-medium text-muted-foreground">Collection Rate</p>
-                  <p className="text-3xl font-bold">{stats.summary.collectionRate}%</p>
+                  <p className="text-3xl font-bold">{stats.summary?.collectionRate || 0}%</p>
                   <p className="mt-2 text-xs text-muted-foreground">Current month</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-blue-600" />
-                <div>
-                  <CardTitle>Monthly Collection Trend</CardTitle>
-                  <CardDescription>Fee collection over the last 6 months</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px] w-full pt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats.trend}>
-                    <defs>
-                      <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#6b7280', fontSize: 12 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#6b7280', fontSize: 12 }}
-                      tickFormatter={(value) => `₹${value}`}
-                    />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      formatter={(value: any) => [`₹${value.toLocaleString()}`, 'Collected']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="collected"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorCollected)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
+          <div className="grid gap-6 md:grid-cols-2">
+            <RealtimeChart
+              title="Income Trend"
+              description="Monthly fee collection vs target"
+              endpoint="/dashboard/finance-stats"
+              socketEvent="FINANCE_UPDATE"
+              type="area"
+              dataKey="actual"
+              xAxisKey="month"
+              color="#22c55e"
+            />
+            <RealtimeChart
+              title="Collection Breakdown"
+              description="Payment method distribution"
+              endpoint="/dashboard/finance-stats"
+              socketEvent="FINANCE_UPDATE"
+              type="pie"
+              dataKey="value"
+              xAxisKey="name"
+              colors={["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"]}
+            />
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>Top Defaulters</CardTitle>
@@ -1101,6 +1136,204 @@ export default function FeesPage() {
                   </TableBody>
                 </Table>
               </div>
+            </CardContent>
+          </Card>
+
+          <div className="h-px bg-border my-6" />
+
+          <Card className="border shadow-sm">
+            <CardHeader>
+              <CardTitle>Class & Section Filtered Reports</CardTitle>
+              <CardDescription>Select filters to view and export class/section-wise fee details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Class</Label>
+                  <Select
+                    value={reportFilters.classId}
+                    onValueChange={(val) => setReportFilters(f => ({ ...f, classId: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Classes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Classes</SelectItem>
+                      {classes.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Section</Label>
+                  <Select
+                    value={reportFilters.sectionId}
+                    onValueChange={(val) => setReportFilters(f => ({ ...f, sectionId: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Sections" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sections</SelectItem>
+                      {sections.map((s: any) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Month (Optional)</Label>
+                  <Select
+                    value={reportFilters.month}
+                    onValueChange={(val) => setReportFilters(f => ({ ...f, month: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Months" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Months</SelectItem>
+                      <SelectItem value="1">January</SelectItem>
+                      <SelectItem value="2">February</SelectItem>
+                      <SelectItem value="3">March</SelectItem>
+                      <SelectItem value="4">April</SelectItem>
+                      <SelectItem value="5">May</SelectItem>
+                      <SelectItem value="6">June</SelectItem>
+                      <SelectItem value="7">July</SelectItem>
+                      <SelectItem value="8">August</SelectItem>
+                      <SelectItem value="9">September</SelectItem>
+                      <SelectItem value="10">October</SelectItem>
+                      <SelectItem value="11">November</SelectItem>
+                      <SelectItem value="12">December</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button onClick={fetchReportData} disabled={isReportsLoading} className="h-10">
+                    {isReportsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                    Generate
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!classReports || classReports.length === 0) {
+                        toast.error('No data available to export');
+                        return;
+                      }
+
+                      const headers = ['Class Name', 'Total Students', 'Paid Students', 'Pending Students', 'Total Collection', 'Balance Due'];
+                      const rows = classReports.map(c => [
+                        `"${c.className}"`,
+                        c.totalStudents,
+                        c.paidStudentsCount,
+                        c.pendingStudentsCount,
+                        c.totalCollection,
+                        c.totalPending
+                      ]);
+
+                      const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', `Class_Wise_Fee_Report.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      toast.success('Fee report exported successfully');
+                    }}
+                    className="h-10 text-xs border-green-600 text-green-700 hover:bg-green-50"
+                  >
+                    Export CSV
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Metrics summary specifically for the filtered reports */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Filtered Total Collection</p>
+                  <p className="text-3xl font-bold text-green-600 mt-1">
+                    ₹{classReports.reduce((sum, c) => sum + (c.totalCollection || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Amount collected</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Filtered Total Pending</p>
+                  <p className="text-3xl font-bold text-red-600 mt-1">
+                    ₹{classReports.reduce((sum, c) => sum + (c.totalPending || 0), 0).toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Amount due</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border shadow-sm">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Students</p>
+                  <p className="text-3xl font-bold text-blue-600 mt-1">
+                    {classReports.reduce((sum, c) => sum + (c.totalStudents || 0), 0)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">In selected classes</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border shadow-sm">
+            <CardHeader>
+              <CardTitle>Class-wise Report</CardTitle>
+              <CardDescription>Collection statistics aggregated by class</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isReportsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : classReports.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground text-sm font-medium">
+                  No fee records found matching these filters.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="font-semibold text-xs">Class</TableHead>
+                        <TableHead className="font-semibold text-xs text-center">Total Students</TableHead>
+                        <TableHead className="text-center font-semibold text-xs text-green-600">Paid Fully</TableHead>
+                        <TableHead className="text-center font-semibold text-xs text-red-600">Pending</TableHead>
+                        <TableHead className="text-right font-semibold text-xs text-green-600">Collection (₹)</TableHead>
+                        <TableHead className="text-right font-semibold text-xs text-red-600">Balance (₹)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {classReports.map((c: any) => (
+                        <TableRow key={c.classId} className="hover:bg-muted/20 transition-colors">
+                          <TableCell className="font-medium text-sm">{c.className}</TableCell>
+                          <TableCell className="font-mono text-xs text-center">{c.totalStudents}</TableCell>
+                          <TableCell className="text-xs text-center font-medium text-green-600">
+                            {c.paidStudentsCount}
+                          </TableCell>
+                          <TableCell className="text-xs text-center font-bold text-red-600">
+                            {c.pendingStudentsCount}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-sm text-green-600">₹{(c.totalCollection || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-bold text-sm text-red-600">₹{(c.totalPending || 0).toLocaleString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

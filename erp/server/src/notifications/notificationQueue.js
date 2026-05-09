@@ -19,13 +19,15 @@
 
 const prisma = require('../config/database');
 const { sendWhatsApp } = require('./whatsappGateway');
+const { sendSMS }      = require('./smsGateway');
 
 // ─────────────────────────────────────────────────────────────
 // Try to load BullMQ — graceful fallback if not installed yet
 // ─────────────────────────────────────────────────────────────
-let Queue, Worker;
+let Queue, Worker, Redis;
 try {
   ({ Queue, Worker } = require('bullmq'));
+  Redis = require('ioredis');
 } catch {
   console.warn('[NotificationQueue] BullMQ not installed. Run: npm install bullmq');
 }
@@ -35,37 +37,48 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 let notifQueue = null;
 let queueWorker = null;
 
-function getRedisConnection() {
-  // BullMQ accepts a URL string for Redis connection
-  return { url: REDIS_URL };
-}
-
 // ─────────────────────────────────────────────────────────────
 // Initialise queue + worker
 // ─────────────────────────────────────────────────────────────
 
-function startQueueWorker() {
-  if (!Queue || !Worker) {
+async function startQueueWorker() {
+  if (!Queue || !Worker || !Redis) {
     console.warn('[NotificationQueue] BullMQ unavailable — using direct processing fallback.');
     return;
   }
 
-  // Check if REDIS_URL is explicitly configured; if still default, test before connecting
   const redisUrl = REDIS_URL;
+
+  // Pre-flight check: Test if Redis is up without crashing the app
+  const testClient = new Redis(redisUrl, {
+    lazyConnect: true,
+    maxRetriesPerRequest: null,
+    retryStrategy: () => null // don't retry, fail fast
+  });
+
+  testClient.on('error', () => {
+    // Suppress connection errors on test client
+  });
+
+  try {
+    await testClient.connect();
+    testClient.disconnect();
+  } catch (err) {
+    console.warn(
+      '[NotificationQueue] Redis unavailable (ECONNREFUSED). ' +
+      'Falling back to direct DB processing. Start Redis to enable BullMQ.'
+    );
+    return; // Don't start BullMQ, rely on direct fallback
+  }
 
   try {
     const connection = {
       url: redisUrl,
       // BullMQ retries aggressively by default — limit it so we don't flood logs
       maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-      lazyConnect: true,
     };
 
-    notifQueue = new Queue('whatsapp-notifications', {
-      connection,
-      // Suppress BullMQ's internal connection retries
-    });
+    notifQueue = new Queue('whatsapp-notifications', { connection });
 
     queueWorker = new Worker(
       'whatsapp-notifications',
@@ -76,31 +89,11 @@ function startQueueWorker() {
       { connection, concurrency: 5 }
     );
 
-    // ── Silence Redis ECONNREFUSED — fall back to direct mode ──
-    let redisDown = false;
-
     const handleRedisError = (err) => {
-      if (redisDown) return; // only log once
-      if (err.code === 'ECONNREFUSED' || err.message?.includes('ECONNREFUSED')) {
-        redisDown = true;
-        console.warn(
-          '[NotificationQueue] Redis unavailable (ECONNREFUSED). ' +
-          'Falling back to direct DB processing. Start Redis to enable BullMQ.'
-        );
-        // Close queue & worker cleanly to stop further retries
-        Promise.all([
-          notifQueue?.close().catch(() => {}),
-          queueWorker?.close(true).catch(() => {}),
-        ]).then(() => {
-          notifQueue  = null;
-          queueWorker = null;
-        });
-      } else {
-        console.error('[NotificationQueue] Redis error:', err.message);
-      }
+      console.error('[NotificationQueue] Redis error:', err.message);
     };
 
-    notifQueue.on('error',  handleRedisError);
+    notifQueue.on('error', handleRedisError);
     queueWorker.on('error', handleRedisError);
 
     queueWorker.on('completed', (job) => {
@@ -108,15 +101,13 @@ function startQueueWorker() {
     });
 
     queueWorker.on('failed', (job, err) => {
-      if (err.code !== 'ECONNREFUSED') {
-        console.error(`[NotificationQueue] Job ${job?.id} failed:`, err.message);
-      }
+      console.error(`[NotificationQueue] Job ${job?.id} failed:`, err.message);
     });
 
     console.log('[NotificationQueue] BullMQ worker started');
   } catch (err) {
     console.error('[NotificationQueue] Failed to start BullMQ worker:', err.message);
-    notifQueue  = null;
+    notifQueue = null;
     queueWorker = null;
   }
 }
@@ -135,9 +126,18 @@ async function processOneQueueRow(queueRowId) {
     data: { status: 'PROCESSING' },
   });
 
-  const result = await sendWhatsApp(row.phoneNumber, row.message);
+  const [waResult, smsResult] = await Promise.all([
+    sendWhatsApp(row.phoneNumber, row.message),
+    sendSMS(row.phoneNumber, row.message),
+  ]);
 
-  if (result.success) {
+  const success = waResult.success || smsResult.success;
+  const providerResponse = {
+    whatsapp: waResult.providerResponse,
+    sms: smsResult.providerResponse
+  };
+
+  if (success) {
     await Promise.all([
       prisma.notificationQueue.update({
         where: { id: queueRowId },
@@ -150,7 +150,7 @@ async function processOneQueueRow(queueRowId) {
           message: row.message,
           deliveryStatus: 'sent',
           notifType: row.notifType,
-          providerResponse: JSON.stringify(result.providerResponse),
+          providerResponse: JSON.stringify(providerResponse),
         },
       }),
     ]);
@@ -160,7 +160,7 @@ async function processOneQueueRow(queueRowId) {
         where: { id: queueRowId },
         data: {
           status: 'FAILED',
-          failureReason: JSON.stringify(result.providerResponse).slice(0, 500),
+          failureReason: JSON.stringify(providerResponse).slice(0, 500),
         },
       }),
       prisma.notificationLog.create({
@@ -170,7 +170,7 @@ async function processOneQueueRow(queueRowId) {
           message: row.message,
           deliveryStatus: 'failed',
           notifType: row.notifType,
-          providerResponse: JSON.stringify(result.providerResponse),
+          providerResponse: JSON.stringify(providerResponse),
         },
       }),
     ]);

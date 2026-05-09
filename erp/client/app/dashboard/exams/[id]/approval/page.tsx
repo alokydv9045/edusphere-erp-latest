@@ -161,7 +161,7 @@ export default function PrincipalApprovalPage() {
             {error && (
                 <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-800 border border-red-200">
                     <AlertCircle className="h-4 w-4" />
-                    <span>{error}</span>
+                    <span>{typeof error === "string" ? error : JSON.stringify(error)}</span>
                 </div>
             )}
 
