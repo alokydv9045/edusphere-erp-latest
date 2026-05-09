@@ -30,6 +30,17 @@ services:
           type: web
           name: edusphere-client
           property: url
+      # Notifications (Fast2SMS & WhatsApp)
+      - key: FAST2SMS_API_KEY
+        sync: false
+      - key: WHATSAPP_API_URL
+        value: https://graph.facebook.com/v18.0
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
       # School Identity
       - key: SCHOOL_ID
         sync: false
@@ -49,7 +60,7 @@ services:
     env: node
     plan: free # or starter
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: npx next start -p $PORT
     rootDir: client
     envVars:
       - key: NEXT_PUBLIC_API_URL
