@@ -1,8 +1,4 @@
 services:
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🟢 ERP SYSTEM (School Portal)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
   # ERP Backend API
   - type: web
     name: edusphere-erp-api
@@ -27,7 +23,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: edusphere-erp-cache
           property: connectionString
       - key: JWT_SECRET
@@ -69,13 +65,9 @@ services:
         value: 1
 
   # ERP Redis (for BullMQ)
-  - type: redis
+  - type: keyvalue
     name: edusphere-erp-cache
     plan: free
-
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🔵 ADMIN SYSTEM (Management Portal)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   # Admin Backend API
   - type: web
@@ -122,10 +114,6 @@ services:
         value: 3000
       - key: NEXT_TELEMETRY_DISABLED
         value: 1
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🛠️ INFRASTRUCTURE
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 databases:
   # ERP Database
