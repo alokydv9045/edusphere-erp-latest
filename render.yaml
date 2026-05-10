@@ -66,6 +66,7 @@ services:
   - type: keyvalue
     name: edusphere-erp-cache
     plan: free
+    ipAllowList: []
 
   # Admin Backend API
   - type: web
