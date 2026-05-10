@@ -4,7 +4,6 @@ services:
     name: edusphere-erp-api
     env: node
     plan: free
-    port: 5001
     buildCommand: npm install --include=dev && npx prisma generate
     startCommand: npx prisma migrate deploy && npm start
     rootDir: erp/server
@@ -52,7 +51,6 @@ services:
     name: edusphere-erp-client
     env: node
     plan: free
-    port: 3001
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     rootDir: erp/client
@@ -74,7 +72,6 @@ services:
     name: edusphere-admin-api
     env: node
     plan: free
-    port: 5000
     buildCommand: npm install --include=dev && npx prisma generate
     startCommand: npx prisma db push && npm start
     rootDir: Admin/server
@@ -103,7 +100,6 @@ services:
     name: edusphere-admin-client
     env: node
     plan: free
-    port: 3000
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     rootDir: Admin/client
