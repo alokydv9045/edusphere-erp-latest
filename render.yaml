@@ -21,6 +21,10 @@ services:
         fromDatabase:
           name: edusphere-erp-db
           property: connectionString
+      - key: DIRECT_URL
+        fromDatabase:
+          name: edusphere-erp-db
+          property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
