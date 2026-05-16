@@ -495,5 +495,5 @@ export const analyticsAPI = {
 
 // Export all APIs
 export { authAPI } from './auth';
-export { schoolAPI, subscriptionAPI, invoiceAPI, adminUserAPI, analyticsAPI, profileAPI };
 export { default as apiClient } from './client';
+
