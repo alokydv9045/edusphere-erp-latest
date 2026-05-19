@@ -46,7 +46,7 @@ export default function AcademicYearsPage() {
         setIsLoading(true);
         try {
             const response = await academicAPI.getAcademicYears();
-            setYears(response.years || []);
+            setYears(response.academicYears || []);
         } catch (error) {
             console.error("Failed to fetch academic years", error);
             toast.error('Failed to load academic years');

@@ -1,5 +1,34 @@
 import apiClient from './client';
 
+export interface StudentSummary {
+  id: string;
+  admissionNumber?: string;
+  rollNumber?: string;
+  status?: string;
+  currentClassId?: string;
+  sectionId?: string;
+  currentClass?: { id: string; name: string };
+  section?: { id: string; name: string };
+  [key: string]: any;
+}
+
+export interface TeacherSummary {
+  id: string;
+  employeeId?: string;
+  department?: string;
+  designation?: string;
+  subjects?: Array<{ id: string; subject: { id: string; name: string } }>;
+  [key: string]: any;
+}
+
+export interface StaffSummary {
+  id: string;
+  employeeId?: string;
+  department?: string;
+  designation?: string;
+  [key: string]: any;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -21,9 +50,9 @@ export interface User {
   qrIssued?: boolean;
   qrIssuedAt?: string | null;
   createdAt: string;
-  student?: any;
-  teacher?: any;
-  staff?: any;
+  student?: StudentSummary;
+  teacher?: TeacherSummary;
+  staff?: StaffSummary;
 }
 
 export interface CreateUserData {
@@ -34,6 +63,45 @@ export interface CreateUserData {
   role: 'SUPER_ADMIN' | 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'ACCOUNTANT' | 'LIBRARIAN' | 'INVENTORY_MANAGER' | 'HR_MANAGER' | 'ADMISSION_MANAGER';
   roles?: string[]; 
   phone?: string;
+}
+
+export interface UpdateUserData {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  username?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  bloodGroup?: string;
+  address?: string;
+  role?: string;
+  roles?: string[];
+  isActive?: boolean;
+  emailVerified?: boolean;
+}
+
+export interface ChangePasswordData {
+  oldPassword?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+}
+
+export interface GenericApiResponse {
+  success: boolean;
+  message?: string;
+}
+
+export interface UpdateUserResponse extends GenericApiResponse {
+  user: User;
+}
+
+export interface ToggleQRResponse extends GenericApiResponse {
+  qrIssued?: boolean;
+  qrIssuedAt?: string | null;
+}
+
+export interface RegenerateQRResponse extends GenericApiResponse {
+  qrCode?: string;
 }
 
 export const userAPI = {
@@ -62,12 +130,12 @@ export const userAPI = {
     return data.user;
   },
 
-  resetPassword: async (id: string, password: string): Promise<any> => {
+  resetPassword: async (id: string, password: string): Promise<GenericApiResponse> => {
     const { data } = await apiClient.post(`/users/${id}/reset-password`, { password });
     return data;
   },
 
-  update: async (id: string, updates: any): Promise<any> => {
+  update: async (id: string, updates: UpdateUserData): Promise<UpdateUserResponse> => {
     const { data } = await apiClient.put(`/users/${id}`, updates);
     return data;
   },
@@ -76,7 +144,7 @@ export const userAPI = {
     id: string,
     roles: string[],
     primaryRole?: string
-  ): Promise<any> => {
+  ): Promise<UpdateUserResponse> => {
     const { data } = await apiClient.put(`/users/${id}/roles`, {
       roles,
       primaryRole: primaryRole ?? roles[0],
@@ -84,7 +152,7 @@ export const userAPI = {
     return data;
   },
 
-  updateAvatar: async (id: string, file: File): Promise<any> => {
+  updateAvatar: async (id: string, file: File): Promise<UpdateUserResponse> => {
     const formData = new FormData();
     formData.append('avatar', file);
     const { data } = await apiClient.patch(`/users/${id}/avatar`, formData, {
@@ -93,17 +161,17 @@ export const userAPI = {
     return data;
   },
 
-  changePassword: async (data: any): Promise<any> => {
+  changePassword: async (data: ChangePasswordData): Promise<GenericApiResponse> => {
     const res = await apiClient.post('/users/me/change-password', data);
     return res.data;
   },
 
-  toggleQRIssued: async (id: string, issued: boolean): Promise<any> => {
+  toggleQRIssued: async (id: string, issued: boolean): Promise<ToggleQRResponse> => {
     const { data } = await apiClient.post(`/users/${id}/qr/status`, { issued });
     return data;
   },
 
-  regenerateQR: async (id: string): Promise<any> => {
+  regenerateQR: async (id: string): Promise<RegenerateQRResponse> => {
     const { data } = await apiClient.post(`/users/${id}/qr/regenerate`);
     return data;
   },

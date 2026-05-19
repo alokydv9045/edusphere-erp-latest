@@ -60,7 +60,7 @@ export default function RegistrationSummary({ form }: RegistrationSummaryProps) 
 
                 if (values.academicYearId) {
                     const yearsData = await academicAPI.getAcademicYears();
-                    const selectedYear = yearsData.years?.find((y: any) => y.id === values.academicYearId);
+                    const selectedYear = yearsData.academicYears?.find((y: any) => y.id === values.academicYearId);
                     if (selectedYear) setAcademicYearName(selectedYear.name);
                 }
 

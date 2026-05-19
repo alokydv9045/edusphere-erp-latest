@@ -39,8 +39,8 @@ export default function EditRoutePage() {
       try {
         setIsLoading(true);
         const res = await transportAPI.getRouteById(id as string);
-        if (res.data?.success) {
-            const route = res.data.route;
+        if (res.success) {
+            const route = res.route;
             setFormData({
                 name: route.name || '',
                 description: route.description || '',
@@ -105,7 +105,7 @@ export default function EditRoutePage() {
       };
       
       const res = await transportAPI.updateRoute(id as string, payload);
-      if (res.data?.success) {
+      if (res.success) {
         toast.success('Route network updated successfully!');
         router.push('/dashboard/transport/routes');
       }

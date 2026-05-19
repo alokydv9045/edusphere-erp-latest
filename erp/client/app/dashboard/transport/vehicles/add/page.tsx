@@ -43,7 +43,7 @@ export default function AddVehiclePage() {
         ...formData,
         capacity: parseInt(formData.capacity)
       });
-      if (res.data?.success) {
+      if (res.success) {
         toast.success('Vehicle registered successfully!');
         router.push('/dashboard/transport/vehicles');
       }

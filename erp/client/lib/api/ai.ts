@@ -19,6 +19,38 @@ export interface InitResponse {
   };
 }
 
+export interface GenerateAssignmentParams {
+  topic: string;
+  classId?: string;
+  className?: string;
+  subject?: string;
+  referenceText?: string;
+  complexity?: string;
+  questionTypes?: string[] | Record<string, string | number>;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD' | string;
+  questionCount?: number;
+  includeSolutions?: boolean;
+  language?: string;
+  format?: string;
+}
+
+export interface GeneratedAssignmentResponse {
+  success: boolean;
+  data?: Record<string, unknown>;
+  assignment?: {
+    title: string;
+    questions: Array<{
+      questionNumber: number;
+      questionText: string;
+      options?: string[];
+      correctAnswer?: string;
+      marks: number;
+    }>;
+  };
+  error?: string;
+  message?: string;
+}
+
 export const aiAPI = {
   initChat: async (): Promise<InitResponse> => {
     const { data } = await apiClient.post('/ai/init');
@@ -30,7 +62,7 @@ export const aiAPI = {
     return data;
   },
 
-  generateSmartAssignment: async (params: any): Promise<any> => {
+  generateSmartAssignment: async (params: GenerateAssignmentParams): Promise<GeneratedAssignmentResponse> => {
     const { data } = await apiClient.post('/ai/generate-smart-assignment', params);
     return data;
   },

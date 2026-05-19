@@ -59,7 +59,7 @@ export default function VehicleDetailsPage() {
     try {
       setIsLoading(true);
       const res = await transportAPI.getVehicleById(id as string);
-      if (res.data?.success) setVehicle(res.data.vehicle);
+      if (res.success) setVehicle(res.vehicle);
     } catch (err: any) {
       toast.error('Could not fetch asset details.');
     } finally {
@@ -76,7 +76,7 @@ export default function VehicleDetailsPage() {
       try {
           setIsSubmitting(true);
           const res = await transportAPI.logMaintenance(id as string, logForm);
-          if (res.data?.success) {
+          if (res.success) {
               toast.success('Maintenance protocol logged.');
               setIsLogModalOpen(false);
               fetchVehicle(); // Refresh data

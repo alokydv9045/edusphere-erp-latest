@@ -24,7 +24,7 @@ export default function MySchedulePage() {
             // If the teacher's ID is needed specifically, it would come from the auth context.
             // Assuming the existing teacherAPI.getMySchedule() was the pattern.
             const res = await timetableAPI.getTeacherSchedule('me'); 
-            setSchedule(res.schedule || []);
+            setSchedule(res.slots || []);
         } catch (err: any) {
             console.error('Failed to fetch schedule:', err);
             setError('Unable to load schedule. Please try again later.');

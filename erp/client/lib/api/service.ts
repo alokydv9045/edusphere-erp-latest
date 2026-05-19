@@ -32,18 +32,44 @@ export interface ServiceRequest {
   };
 }
 
+export interface ServiceQueryParams {
+  page?: number;
+  limit?: number;
+  type?: string;
+  status?: string;
+  priority?: string;
+  search?: string;
+  myRequests?: boolean;
+}
+
+export interface CreateServiceRequestData {
+  type: 'LEAVE' | 'CERTIFICATE' | 'ID_CARD' | 'COMPLAINT' | 'OTHER' | string;
+  subject: string;
+  description: string;
+  priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' | string;
+  startDate?: string;
+  endDate?: string;
+  attachmentUrl?: string;
+}
+
+export interface UpdateServiceRequestData {
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RESOLVED' | string;
+  priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' | string;
+  reviewerRemarks?: string;
+}
+
 export const serviceAPI = {
-  getAll: async (params?: any): Promise<ServiceRequest[]> => {
+  getAll: async (params?: ServiceQueryParams): Promise<ServiceRequest[]> => {
     const { data } = await apiClient.get('/services', { params });
     return data.requests || [];
   },
 
-  create: async (requestData: any): Promise<{ message: string, request: ServiceRequest }> => {
+  create: async (requestData: CreateServiceRequestData): Promise<{ message: string, request: ServiceRequest }> => {
     const { data } = await apiClient.post('/services', requestData);
     return data;
   },
 
-  update: async (id: string, updates: any): Promise<{ message: string, request: ServiceRequest }> => {
+  update: async (id: string, updates: UpdateServiceRequestData): Promise<{ message: string, request: ServiceRequest }> => {
     const { data } = await apiClient.patch(`/services/${id}`, updates);
     return data;
   },

@@ -1,6 +1,7 @@
 const notificationRepo = require('../repositories/NotificationRepository');
 const socketService = require('./socketService');
 const logger = require('../config/logger');
+const prisma = require('../config/database');
 
 class NotificationService {
     async getNotifications(userId) {
@@ -63,8 +64,6 @@ class NotificationService {
      * @param {Object} notificationData { title, message, ... }
      */
     async notifyRoles(roles, notificationData) {
-        const prisma = require('../config/database');
-        
         try {
             // 1. Find all users with these roles
             const users = await prisma.user.findMany({

@@ -45,4 +45,13 @@ process.on('beforeExit', async () => {
   await prisma.$disconnect();
 });
 
+prisma.checkDatabaseHealth = async () => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return { status: 'up' };
+  } catch (error) {
+    return { status: 'down', error: error.message };
+  }
+};
+
 module.exports = prisma;

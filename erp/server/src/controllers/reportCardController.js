@@ -26,7 +26,7 @@ const generateReportCards = asyncHandler(async (req, res) => {
         });
     }
 
-    const generatedBy = req.user.id;
+    const generatedBy = req.user.userId;
     const created = [];
     const errors = [];
 
@@ -81,7 +81,7 @@ const getReportCards = asyncHandler(async (req, res) => {
 
     // Data isolation: Students only see their own published report cards
     if (req.user.role === 'STUDENT') {
-        const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
+        const student = await prisma.student.findFirst({ where: { userId: req.user.userId } });
         if (!student) return res.status(404).json({ 
             success: false,
             message: 'Student profile not found' 
@@ -208,7 +208,7 @@ const approveReportCard = asyncHandler(async (req, res) => {
         where: { id },
         data: {
             status: 'APPROVED',
-            approvedBy: req.user.id,
+            approvedBy: req.user.userId,
             approvedAt: new Date(),
         },
     });
@@ -238,7 +238,7 @@ const bulkApproveReportCards = asyncHandler(async (req, res) => {
         },
         data: {
             status: 'APPROVED',
-            approvedBy: req.user.id,
+            approvedBy: req.user.userId,
             approvedAt: new Date(),
         },
     });
@@ -326,7 +326,7 @@ const downloadReportCard = asyncHandler(async (req, res) => {
 
     // IDOR Check: Students can only download their own report card
     if (req.user.role === 'STUDENT') {
-        const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
+        const student = await prisma.student.findFirst({ where: { userId: req.user.userId } });
         if (!student || reportCard.studentId !== student.id) {
             return res.status(403).json({ 
                 success: false,
@@ -440,11 +440,16 @@ const getReportTemplates = asyncHandler(async (req, res) => {
 });
 
 const createReportTemplate = asyncHandler(async (req, res) => {
-    const templateData = req.body;
-    if (templateData.isDefault) {
+    const { name, description, headerConfig, footerConfig, gradeTableConfig, layoutConfig, isDefault } = req.body;
+    if (!name) {
+        return res.status(400).json({ success: false, message: 'Template name is required' });
+    }
+    if (isDefault) {
         await prisma.reportTemplate.updateMany({ data: { isDefault: false } });
     }
-    const template = await prisma.reportTemplate.create({ data: templateData });
+    const template = await prisma.reportTemplate.create({
+        data: { name, description, headerConfig, footerConfig, gradeTableConfig, layoutConfig, isDefault: Boolean(isDefault) },
+    });
     res.status(201).json({ 
         success: true,
         template 
@@ -453,13 +458,29 @@ const createReportTemplate = asyncHandler(async (req, res) => {
 
 const updateReportTemplate = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updates = req.body;
-    if (updates.isDefault) {
+    const { name, description, headerConfig, footerConfig, gradeTableConfig, layoutConfig, isDefault } = req.body;
+    
+    const existing = await prisma.reportTemplate.findUnique({ where: { id } });
+    if (!existing) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+    
+    if (isDefault) {
         await prisma.reportTemplate.updateMany({
             where: { id: { not: id } },
             data: { isDefault: false }
         });
     }
+    
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (headerConfig !== undefined) updates.headerConfig = headerConfig;
+    if (footerConfig !== undefined) updates.footerConfig = footerConfig;
+    if (gradeTableConfig !== undefined) updates.gradeTableConfig = gradeTableConfig;
+    if (layoutConfig !== undefined) updates.layoutConfig = layoutConfig;
+    if (isDefault !== undefined) updates.isDefault = Boolean(isDefault);
+    
     const template = await prisma.reportTemplate.update({
         where: { id },
         data: updates

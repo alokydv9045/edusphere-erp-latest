@@ -22,35 +22,12 @@ const {
   deleteTimetable,
 } = require('../controllers/academicController');
 const { authMiddleware, requireRole } = require('../middleware/auth');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { createUploader } = require('../utils/fileUpload');
 
-// Configure multer for timetable PDF uploads
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'timetables');
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-    }
-    cb(null, UPLOAD_DIR);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `timetable-${Date.now()}${path.extname(file.originalname)}`);
-  },
-});
-
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files are allowed'), false);
-    }
-  },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+const upload = createUploader({
+  folder: 'timetables',
+  type: 'pdf',
+  maxSizeBytes: 5 * 1024 * 1024, // 5MB
 });
 
 const router = express.Router();

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { academicAPI } from '@/lib/api';
+import { academicAPI, ClassItem, SectionItem, AcademicYear } from '@/lib/api/academic';
 
 export function useAcademicData(selectedClassId?: string) {
-    const [classes, setClasses] = useState<any[]>([]);
-    const [sections, setSections] = useState<any[]>([]);
-    const [academicYears, setAcademicYears] = useState<any[]>([]);
+    const [classes, setClasses] = useState<ClassItem[]>([]);
+    const [sections, setSections] = useState<SectionItem[]>([]);
+    const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -22,9 +22,13 @@ export function useAcademicData(selectedClassId?: string) {
 
                 setClasses(classesRes.classes || []);
                 setAcademicYears(yearsRes.academicYears || []);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error("Failed to fetch initial academic data", err);
-                setError(err.message || "Failed to load academic data");
+                if (err instanceof Error) {
+                    setError(err.message || "Failed to load academic data");
+                } else {
+                    setError("Failed to load academic data");
+                }
             } finally {
                 setLoading(false);
             }
@@ -45,9 +49,13 @@ export function useAcademicData(selectedClassId?: string) {
                 setLoading(true);
                 const sectionsRes = await academicAPI.getSections({ classId: selectedClassId });
                 setSections(sectionsRes.sections || []);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error("Failed to fetch sections", err);
-                setError(err.message || "Failed to load sections");
+                if (err instanceof Error) {
+                    setError(err.message || "Failed to load sections");
+                } else {
+                    setError("Failed to load sections");
+                }
             } finally {
                 setLoading(false);
             }

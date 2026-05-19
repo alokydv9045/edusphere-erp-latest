@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Download, RefreshCw, QrCode, Loader2 } from 'lucide-react';
+import apiClient from '@/lib/api/client';
 
 interface UserQRCodeProps {
     userId: string;
@@ -12,8 +13,6 @@ interface UserQRCodeProps {
     size?: number;
     className?: string;
 }
-
-import apiClient from '@/lib/api/client';
 
 export default function UserQRCode({ 
     userId, 
@@ -34,8 +33,15 @@ export default function UserQRCode({
             setError(null);
             const res = await apiClient.get(`/users/${userId}/qr`);
             setQrCode(res.data.qrCode);
-        } catch (err: any) {
-            setError(err.response?.data?.message || err.message || 'Failed to load QR code');
+        } catch (err: unknown) {
+            if (err && typeof err === 'object' && 'response' in err) {
+                const axiosErr = err as { response?: { data?: { message?: string } }; message?: string };
+                setError(axiosErr.response?.data?.message || axiosErr.message || 'Failed to load QR code');
+            } else if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError('Failed to load QR code');
+            }
         } finally {
             setLoading(false);
         }
@@ -48,8 +54,15 @@ export default function UserQRCode({
             setRegenerating(true);
             const res = await apiClient.post(`/users/${userId}/qr/regenerate`);
             setQrCode(res.data.qrCode);
-        } catch (err: any) {
-            setError(err.response?.data?.message || err.message || 'Regeneration failed');
+        } catch (err: unknown) {
+            if (err && typeof err === 'object' && 'response' in err) {
+                const axiosErr = err as { response?: { data?: { message?: string } }; message?: string };
+                setError(axiosErr.response?.data?.message || axiosErr.message || 'Regeneration failed');
+            } else if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError('Regeneration failed');
+            }
         } finally {
             setRegenerating(false);
         }
@@ -84,7 +97,7 @@ export default function UserQRCode({
                 ) : qrCode ? (
                     <Image
                         src={qrCode}
-                        alt={`QR Code for ${userName}`}
+                        alt={`QR Code for ${userName || 'User'}`}
                         width={size}
                         height={size}
                         className="qr-image"

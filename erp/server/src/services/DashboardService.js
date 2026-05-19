@@ -1,13 +1,19 @@
+const prisma = require('../config/database');
 const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
 const DashboardRepository = require('../repositories/DashboardRepository');
 const CalendarService = require('./CalendarService');
 const logger = require('../config/logger');
+const { getCachedStats, setCachedStats } = require('../cache/dashboardCache');
 
 /**
  * Service for Dashboard operations
  */
 class DashboardService {
     async getDashboardStats(userRole, userId) {
+        // ── Cache Check ──
+        const cached = getCachedStats(userRole, userId);
+        if (cached) return cached;
+
         const today = getSchoolDate();
         const todayEvents = await CalendarService.getEvents(today, today);
         const todayEvent = todayEvents.length > 0 ? todayEvents[0] : null;
@@ -18,38 +24,34 @@ class DashboardService {
         const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         firstDayOfMonth.setHours(0, 0, 0, 0);
 
+        let result;
         try {
             if (userRole === 'STUDENT') {
                 const stats = await this._getStudentStats(userId, firstDayOfMonth, today);
-                return { ...stats, todayEvent };
-            }
-
-            if (userRole === 'TEACHER') {
+                result = { ...stats, todayEvent };
+            } else if (userRole === 'TEACHER') {
                 const stats = await this._getTeacherStats(userId, todayStart);
-                return { ...stats, todayEvent };
-            }
-
-            if (userRole === 'ACCOUNTANT') {
+                result = { ...stats, todayEvent };
+            } else if (userRole === 'ACCOUNTANT') {
                 const stats = await this._getAccountantStats(today, tomorrow);
-                return { ...stats, todayEvent };
-            }
-
-            if (userRole === 'ADMISSION_MANAGER') {
+                result = { ...stats, todayEvent };
+            } else if (userRole === 'ADMISSION_MANAGER') {
                 const stats = await this._getAdmissionManagerStats(todayStart, tomorrow);
-                return { ...stats, todayEvent };
-            }
-
-            if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
+                result = { ...stats, todayEvent };
+            } else if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
                 const stats = await this._getAdminStats(todayStart, tomorrow);
-                return { ...stats, todayEvent };
+                result = { ...stats, todayEvent };
+            } else {
+                throw new Error(`Unsupported role: ${userRole}`);
             }
         } catch (error) {
             logger.error(`Error in getDashboardStats for role ${userRole}:`, error);
-            // Return minimal fallback stats if requested role fails
             return { role: userRole, error: 'Partial data failure', todayEvent };
         }
 
-        throw new Error(`Unsupported role: ${userRole}`);
+        // ── Cache Set ──
+        setCachedStats(userRole, userId, result);
+        return result;
     }
 
     async _getStudentStats(userId, firstDayOfMonth, today) {
@@ -566,26 +568,37 @@ class DashboardService {
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
-        const trendPromises = [];
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+        const dayAfterToday = new Date(today);
+        dayAfterToday.setDate(dayAfterToday.getDate() + 1);
+
+        // PERF-1 fix: Single batch query instead of 7 individual queries
+        const batchAttendance = await DashboardRepository.getAttendanceCount({
+            date: { gte: sevenDaysAgo, lt: dayAfterToday },
+            attendeeType: { in: ['TEACHER', 'STAFF'] },
+            status: 'PRESENT'
+        }, true); // groupBy date
+
+        // Build a map of date → count
+        const attendanceMap = new Map();
+        if (Array.isArray(batchAttendance)) {
+            batchAttendance.forEach(item => {
+                const key = item.date.toISOString().split('T')[0];
+                attendanceMap.set(key, (attendanceMap.get(key) || 0) + (item._count?.id || item._count || 0));
+            });
+        }
+
+        const trend = [];
         for (let i = 6; i >= 0; i--) {
             const d = new Date(today);
             d.setDate(d.getDate() - i);
-            const nextD = new Date(d);
-            nextD.setDate(nextD.getDate() + 1);
-
-            trendPromises.push(
-                DashboardRepository.getAttendanceCount({
-                    date: { gte: d, lt: nextD },
-                    attendeeType: { in: ['TEACHER', 'STAFF'] },
-                    status: 'PRESENT'
-                }).then(present => ({
-                    date: d.toLocaleDateString('en-US', { weekday: 'short' }),
-                    present
-                }))
-            );
+            const key = d.toISOString().split('T')[0];
+            trend.push({
+                date: d.toLocaleDateString('en-US', { weekday: 'short' }),
+                present: attendanceMap.get(key) || 0
+            });
         }
-        const trend = await Promise.all(trendPromises);
 
         return {
             summary: { totalTeachers, totalStaff, totalEmployees: totalTeachers + totalStaff },
@@ -598,31 +611,59 @@ class DashboardService {
         const today = new Date();
         const monthPromises = [];
 
+        const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        // PERF-1b fix: 2 batch queries instead of 12 individual queries
+        const [completedPayments, pendingPayments, modeBreakdown] = await Promise.all([
+            prisma.feePayment.groupBy({
+                by: ['paymentDate'],
+                where: {
+                    status: 'COMPLETED',
+                    paymentDate: { gte: sixMonthsAgo, lte: endOfMonth }
+                },
+                _sum: { amount: true },
+            }),
+            prisma.feePayment.groupBy({
+                by: ['paymentDate'],
+                where: {
+                    status: 'PENDING',
+                    paymentDate: { gte: sixMonthsAgo, lte: endOfMonth }
+                },
+                _sum: { amount: true },
+            }),
+            DashboardRepository.getFeeModeBreakdown()
+        ]);
+
+        // Aggregate by month
+        const completedByMonth = {};
+        const pendingByMonth = {};
+
+        completedPayments.forEach(p => {
+            if (!p.paymentDate) return;
+            const key = `${p.paymentDate.getFullYear()}-${p.paymentDate.getMonth()}`;
+            completedByMonth[key] = (completedByMonth[key] || 0) + parseFloat(p._sum.amount || 0);
+        });
+
+        pendingPayments.forEach(p => {
+            if (!p.paymentDate) return;
+            const key = `${p.paymentDate.getFullYear()}-${p.paymentDate.getMonth()}`;
+            pendingByMonth[key] = (pendingByMonth[key] || 0) + parseFloat(p._sum.amount || 0);
+        });
+
+        const months = [];
         for (let i = 5; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const start = new Date(d.getFullYear(), d.getMonth(), 1);
-            const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-
-            monthPromises.push(
-                Promise.all([
-                    DashboardRepository.getFeeSum('COMPLETED', start, end),
-                    DashboardRepository.getFeeSum('PENDING', start, end)
-                ]).then(([incomeRes, pendingRes]) => {
-                    const income = parseFloat(incomeRes._sum.amount || 0);
-                    const pending = parseFloat(pendingRes._sum.amount || 0);
-                    const target = (income + pending) * 0.9;
-                    return {
-                        month: d.toLocaleString('default', { month: 'short' }),
-                        collected: income,
-                        pending: pending,
-                        target
-                    };
-                })
-            );
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            const collected = completedByMonth[key] || 0;
+            const pending = pendingByMonth[key] || 0;
+            months.push({
+                month: d.toLocaleString('default', { month: 'short' }),
+                collected,
+                pending,
+                target: (collected + pending) * 0.9
+            });
         }
-        const months = await Promise.all(monthPromises);
-
-        const modeBreakdown = await DashboardRepository.getFeeModeBreakdown();
 
         return {
             trend: months,
@@ -696,12 +737,15 @@ class DashboardService {
 function getRelativeTime(date) {
     const now = getSchoolDate();
     const diff = now - new Date(date);
+
+    // Guard: future timestamps (timezone mismatch or clock skew)
+    if (diff <= 0) return 'Just now';
+
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
     if (minutes < 1) return 'Just now';
-    if (minutes < 0) return 'Just now'; // Handle minor clock skews
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return `${days}d ago`;

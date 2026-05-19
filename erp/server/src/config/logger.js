@@ -40,6 +40,15 @@ const logger = winston.createLogger({
             maxFiles: '14d',
             maxSize: '20m',
         }),
+
+        // 3. HTTP request audit logs
+        new winston.transports.DailyRotateFile({
+            filename: 'logs/http-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            level: 'http',
+            maxFiles: '30d',
+            maxSize: '20m',
+        }),
     ],
 });
 

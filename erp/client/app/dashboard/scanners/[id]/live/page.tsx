@@ -24,7 +24,7 @@ interface ScanUser {
 
 interface LiveFeedEntry {
     id: string;
-    action: string;
+    action?: string | null;
     userName: string;
     userRole: string;
     time: string;

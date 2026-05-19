@@ -208,8 +208,15 @@ class AttendanceService {
             studentId: { in: students.map(s => s.id) }
         });
 
+        // Pre-build Map for O(n) lookups instead of O(n²) nested filtering
+        const recordsByStudent = new Map();
+        records.forEach(r => {
+            if (!recordsByStudent.has(r.studentId)) recordsByStudent.set(r.studentId, []);
+            recordsByStudent.get(r.studentId).push(r);
+        });
+
         const report = students.map(student => {
-            const studentRecords = records.filter(r => r.studentId === student.id);
+            const studentRecords = recordsByStudent.get(student.id) || [];
             return {
                 student,
                 stats: {
@@ -555,8 +562,15 @@ class AttendanceService {
             cursor.setDate(cursor.getDate() + 1);
         }
 
+        // Pre-build Map for O(n) lookups instead of O(n²) nested filtering
+        const recordsByStudent = new Map();
+        records.forEach(r => {
+            if (!recordsByStudent.has(r.studentId)) recordsByStudent.set(r.studentId, []);
+            recordsByStudent.get(r.studentId).push(r);
+        });
+
         const studentMatrix = students.map(student => {
-            const studentRecords = records.filter(r => r.studentId === student.id);
+            const studentRecords = recordsByStudent.get(student.id) || [];
             const byDate = {};
             studentRecords.forEach(r => byDate[r.date.toISOString().split('T')[0]] = r.status);
 

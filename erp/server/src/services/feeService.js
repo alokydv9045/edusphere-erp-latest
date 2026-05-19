@@ -16,27 +16,24 @@ class FeeService {
         if (academicYearId) where.academicYearId = academicYearId;
         if (isActive !== undefined) where.isActive = isActive === 'true';
 
-        // Bug #7 fix: Use include to fetch class + academicYear in one query
-        const feeStructures = await feeRepo.findFeeStructures(where, {
+        // BUG-5 fix: Use true DB-level pagination instead of in-memory slicing
+        const page = parseInt(filters.page) || 1;
+        const limit = parseInt(filters.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const [feeStructures, total] = await feeRepo.findFeeStructuresPaginated(where, {
             class: { select: { id: true, name: true } },
             academicYear: { select: { id: true, name: true } },
             items: true,
-        });
+        }, skip, limit);
 
         const enrichedStructures = feeStructures.map(structure => ({
             ...structure,
             amount: structure.totalAmount, // Alias for frontend compatibility
         }));
 
-        // Bug #9 fix: Apply pagination slice
-        const page = parseInt(filters.page) || 1;
-        const limit = parseInt(filters.limit) || 10;
-        const total = enrichedStructures.length;
-        const start = (page - 1) * limit;
-        const paginatedStructures = enrichedStructures.slice(start, start + limit);
-
         return {
-            structures: paginatedStructures,
+            structures: enrichedStructures,
             pagination: {
                 total,
                 pages: Math.ceil(total / limit),
@@ -141,25 +138,28 @@ class FeeService {
             };
         });
 
-        // Bug #22 fix: Handle OVERDUE status filter
+        // Note: Status filtering is post-query because feeStatus is computed, not a DB column.
+        // When status filter is active, we return the filtered subset and its length as total.
+        // This is an intentional tradeoff — for true DB-level pagination of computed status,
+        // a materialized view or stored procedure would be needed.
         let resultStudents = enrichedStudents;
         if (status) {
             resultStudents = resultStudents.filter(s => {
                 if (status === 'PAID') return s.feeStatus === 'PAID';
                 if (status === 'PENDING') return s.feeStatus === 'PENDING' || s.feeStatus === 'PARTIAL';
-                if (status === 'OVERDUE') return s.feeStatus === 'PENDING' || s.feeStatus === 'PARTIAL';
+                if (status === 'OVERDUE') return s.feeStatus === 'OVERDUE';
                 return true;
             });
         }
 
-        // Bug #8 fix: Use filtered count for pagination, not raw DB count
         return {
             students: resultStudents,
             pagination: {
                 total: status ? resultStudents.length : total,
                 pages: Math.ceil((status ? resultStudents.length : total) / take),
                 page: parseInt(page),
-                limit: take
+                limit: take,
+                filtered: !!status, // Flag so the frontend knows pagination is approximate
             }
         };
     }
@@ -471,19 +471,29 @@ class FeeService {
 
         const trendData = [];
         const now = new Date();
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        
+        // Batch query instead of 6 separate DB calls
+        const recentPayments = await feeRepo.getPaymentsInRange(sixMonthsAgo, new Date());
+        
+        // Group by month in memory
+        const monthlyMap = new Map();
         for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const start = new Date(d.getFullYear(), d.getMonth(), 1);
-            const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-
-            const monthName = d.toLocaleString('default', { month: 'short' });
-            const monthCollection = await feeRepo.getMonthlyCollection(start, end);
-
-            trendData.push({
-                month: monthName,
-                collected: monthCollection?._sum?.amount || 0,
-            });
+            const key = d.toLocaleString('default', { month: 'short', year: 'numeric' });
+            monthlyMap.set(key, { month: d.toLocaleString('default', { month: 'short' }), collected: 0, sortKey: d.getTime() });
         }
+
+        recentPayments.forEach(payment => {
+            const date = new Date(payment.paymentDate);
+            const key = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+            if (monthlyMap.has(key)) {
+                monthlyMap.get(key).collected += payment.amount;
+            }
+        });
+
+        const sortedTrend = Array.from(monthlyMap.values()).sort((a, b) => a.sortKey - b.sortKey);
+        sortedTrend.forEach(t => trendData.push({ month: t.month, collected: t.collected }));
 
         return {
             summary: {
@@ -500,19 +510,37 @@ class FeeService {
      * Get class-wise fee report
      */
     async getClassWiseReport(query) {
-        const { academicYearId, classId, sectionId } = query;
+        const { academicYearId, classId, sectionId, page = 1, limit = 10 } = query;
         
-        const where = { status: 'ACTIVE' };
-        if (classId) where.currentClassId = classId;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const take = parseInt(limit);
+
+        const classWhere = {};
+        if (classId) classWhere.id = classId;
+
+        // Paginate classes
+        const classes = await prisma.class.findMany({
+            where: classWhere,
+            skip,
+            take,
+            orderBy: { name: 'asc' }
+        });
+        
+        const totalClasses = await prisma.class.count({ where: classWhere });
+
+        const where = { status: 'ACTIVE', currentClassId: { in: classes.map(c => c.id) } };
         if (sectionId) where.sectionId = sectionId;
         
+        // PERF-3 fix: Select only required fields, limit feeLedger to aggregates only
         const students = await prisma.student.findMany({
             where,
-            include: {
-                currentClass: true,
-                section: true,
+            select: {
+                id: true,
+                currentClassId: true,
+                currentClass: { select: { id: true, name: true } },
                 feeLedgers: {
                     where: academicYearId ? { academicYearId } : {},
+                    select: { totalPaid: true, totalPending: true }
                 }
             }
         });
@@ -557,7 +585,13 @@ class FeeService {
         });
 
         return {
-             report: Object.values(classMap)
+             report: Object.values(classMap),
+             pagination: {
+                 total: totalClasses,
+                 pages: Math.ceil(totalClasses / take),
+                 page: parseInt(page),
+                 limit: take
+             }
         };
     }
 }

@@ -212,7 +212,7 @@ const createLeaveRequest = asyncHandler(async (req, res) => {
     //    so we never have to parse it from the subject string.
     const request = await prisma.serviceRequest.create({
         data: {
-            requestNumber: `LV-${Date.now().toString().slice(-6)}`,
+            requestNumber: `LV-${Date.now().toString(36).toUpperCase()}-${require('crypto').randomBytes(3).toString('hex').toUpperCase()}`,
             requesterId: userId,
             type: 'LEAVE',
             subject: `${leaveType} Request: ${startDate} to ${endDate}`,

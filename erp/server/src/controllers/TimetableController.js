@@ -1,4 +1,3 @@
-const prisma = require('../config/database');
 const TimetableService = require('../services/TimetableService');
 const asyncHandler = require('../utils/asyncHandler');
 const { emitEvent } = require('../services/socketService');
@@ -10,8 +9,7 @@ const getConfig = asyncHandler(async (req, res) => {
     const { classId } = req.query;
     if (!classId) return res.status(400).json({ success: false, message: 'Class ID is required' });
 
-    // Try to get current academic year if not provided
-    const academicYear = await prisma.academicYear.findFirst({ where: { isCurrent: true } });
+    const academicYear = await TimetableService.getCurrentAcademicYear();
     
     const config = await TimetableService.getOrCreateConfig(classId, academicYear.id);
     res.status(200).json({ 
@@ -34,7 +32,6 @@ const generateBaseline = asyncHandler(async (req, res) => {
     const { timetableId } = req.params;
     const { configId, classId } = req.body;
 
-    // Use null if timetableId is not a valid GUID/ID or is 'new' 
     const tId = (timetableId && timetableId.length > 10) ? timetableId : null;
 
     await TimetableService.generateBaseline(tId, configId, classId);
@@ -62,7 +59,6 @@ const updateSlot = asyncHandler(async (req, res) => {
 const getTeacherSchedule = asyncHandler(async (req, res) => {
     let { teacherId } = req.params;
 
-    // Handle 'me' alias for current logged in teacher
     if (teacherId === 'me') {
         teacherId = req.user.teacherId;
         if (!teacherId) {
@@ -73,18 +69,7 @@ const getTeacherSchedule = asyncHandler(async (req, res) => {
         }
     }
 
-    const schedule = await prisma.timetableSlot.findMany({
-        where: { teacherId },
-        include: {
-            subject: true,
-            section: { include: { class: true } },
-            room: true
-        },
-        orderBy: [
-            { dayOfWeek: 'asc' },
-            { startTime: 'asc' }
-        ]
-    });
+    const schedule = await TimetableService.getTeacherSchedule(teacherId);
 
     res.status(200).json({ 
         success: true,
@@ -95,18 +80,7 @@ const getTeacherSchedule = asyncHandler(async (req, res) => {
 const getStudentSchedule = asyncHandler(async (req, res) => {
     const { sectionId } = req.params;
 
-    const schedule = await prisma.timetableSlot.findMany({
-        where: { sectionId },
-        include: {
-            subject: true,
-            teacher: { include: { user: true } },
-            room: true
-        },
-        orderBy: [
-            { dayOfWeek: 'asc' },
-            { startTime: 'asc' }
-        ]
-    });
+    const schedule = await TimetableService.getStudentSchedule(sectionId);
 
     res.status(200).json({ 
         success: true,
@@ -118,10 +92,7 @@ const getStudentSchedule = asyncHandler(async (req, res) => {
  * Room Management
  */
 const getRooms = asyncHandler(async (req, res) => {
-    const rooms = await prisma.room.findMany({
-        where: { isActive: true },
-        orderBy: { name: 'asc' }
-    });
+    const rooms = await TimetableService.getRooms();
     res.status(200).json({ 
         success: true,
         rooms 
@@ -129,7 +100,7 @@ const getRooms = asyncHandler(async (req, res) => {
 });
 
 const createRoom = asyncHandler(async (req, res) => {
-    const room = await prisma.room.create({ data: req.body });
+    const room = await TimetableService.createRoom(req.body);
     res.status(201).json({ 
         success: true,
         message: 'Room created successfully', 

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from 'sonner';
 import { API_BASE_URL } from './apiConfig';
 
 const apiClient = axios.create({
@@ -9,7 +10,7 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor to normalize paths
+// Request interceptor to normalize paths and attach CSRF token
 apiClient.interceptors.request.use(
   (config) => {
     // Normalize URL to prevent double /api prefix
@@ -19,6 +20,17 @@ apiClient.interceptors.request.use(
 
     // Note: No longer sending Authorization header from localStorage
     // Browser automatically sends 'auth_token' cookie if withCredentials is true
+
+    // SEC-6: Attach CSRF token for mutation requests
+    const method = config.method?.toUpperCase();
+    if (method && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      const csrfToken = typeof document !== 'undefined'
+        ? document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1]
+        : undefined;
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken;
+      }
+    }
     
     return config;
   },
@@ -43,8 +55,9 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // RETRY LOGIC: Retry on 5xx errors (server failure) up to 3 times
-    if (status >= 500 && (!config.__retryCount || config.__retryCount < 3)) {
+    // RETRY LOGIC: Retry on 5xx errors (server failure) up to 3 times — ONLY for safe GET requests
+    const isSafeMethod = config?.method?.toUpperCase() === 'GET';
+    if (isSafeMethod && status >= 500 && (!config.__retryCount || config.__retryCount < 3)) {
       config.__retryCount = (config.__retryCount || 0) + 1;
       
       // Exponential backoff delay (1s, 2s, 3s)
@@ -63,10 +76,10 @@ apiClient.interceptors.response.use(
         status: status || 'NETWORK_FAILURE'
       });
       
-      // In a real production app, we would trigger a global notification/toast here
+      // Global notification for 5xx/Network errors
       if (typeof window !== 'undefined') {
         const message = !status ? 'Network connection failed' : 'Internal server error';
-        alert(`⚠️ ${message}. Please try again later.`); // Fallback UI
+        toast.error(`${message}. Please try again later.`);
       }
     }
 

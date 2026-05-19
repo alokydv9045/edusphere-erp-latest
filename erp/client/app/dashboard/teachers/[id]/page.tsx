@@ -45,7 +45,7 @@ export default function TeacherDetailPage() {
     try {
       setIsLoadingTimetable(true);
       const res = await timetableAPI.getTeacherSchedule(teacherId);
-      setTimetable(res.schedule || []);
+      setTimetable(res.slots || []);
     } catch (err) {
       console.error('Failed to fetch timetable:', err);
     } finally {

@@ -91,6 +91,76 @@ export interface FeeCollectionSummary {
   collectionRate: number;
 }
 
+export interface InventoryAlertItem {
+  id: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  minQuantity: number;
+}
+
+export interface AccountantDashboardStats {
+  success: boolean;
+  totalRevenue?: number;
+  totalExpenses?: number;
+  pendingInvoices?: number;
+  summary?: {
+    todayCollection: number;
+    yearCollection: number;
+    pendingAmount: number;
+    txToday: number;
+  };
+  todayTransactions?: Array<any>;
+  defaulters?: Array<any>;
+  trend?: Array<any>;
+  modeBreakdown?: Array<any>;
+  [key: string]: any;
+}
+
+export interface LibraryDashboardStats {
+  success: boolean;
+  totalBooks: number;
+  issuedBooks: number;
+  overdueBooks: number;
+  summary?: any;
+}
+
+export interface HRDashboardStats {
+  success: boolean;
+  totalEmployees: number;
+  presentToday: number;
+  onLeave: number;
+  summary?: any;
+}
+
+export interface FinanceDashboardStats {
+  success: boolean;
+  netIncome: number;
+  cashFlow: number;
+  summary?: any;
+}
+
+export interface ExamDashboardStats {
+  success: boolean;
+  upcomingExams: number;
+  ongoingExams: number;
+  summary?: any;
+}
+
+export interface InventoryDashboardStats {
+  success: boolean;
+  totalItems: number;
+  lowStockItems: number;
+  summary?: any;
+}
+
+export interface NotificationDashboardStats {
+  success: boolean;
+  unreadCount: number;
+  recentNotifications: Array<{ id: string; title: string; createdAt: string }>;
+  stats?: any;
+}
+
 export const dashboardAPI = {
   getStats: async (): Promise<{ success: boolean; stats: DashboardStats }> => {
     const { data } = await apiClient.get('/dashboard/stats');
@@ -112,42 +182,42 @@ export const dashboardAPI = {
     return data;
   },
 
-  getInventoryAlerts: async (): Promise<{ success: boolean; lowStockCount: number; items: any[] }> => {
+  getInventoryAlerts: async (): Promise<{ success: boolean; lowStockCount: number; items: InventoryAlertItem[] }> => {
     const { data } = await apiClient.get('/dashboard/inventory-alerts');
     return data;
   },
 
-  getAccountantStats: async (): Promise<any> => {
+  getAccountantStats: async (): Promise<AccountantDashboardStats> => {
     const { data } = await apiClient.get('/dashboard/accountant-stats');
     return data;
   },
 
-  getLibraryStats: async (): Promise<any> => {
+  getLibraryStats: async (): Promise<LibraryDashboardStats> => {
     const { data } = await apiClient.get('/dashboard/library-stats');
     return data;
   },
 
-  getHRStats: async (): Promise<any> => {
+  getHRStats: async (): Promise<HRDashboardStats> => {
     const { data } = await apiClient.get('/dashboard/hr-stats');
     return data;
   },
 
-  getFinanceStats: async (): Promise<any> => {
+  getFinanceStats: async (): Promise<FinanceDashboardStats> => {
     const { data } = await apiClient.get('/dashboard/finance-stats');
     return data;
   },
 
-  getExamStats: async (classId?: string): Promise<any> => {
+  getExamStats: async (classId?: string): Promise<ExamDashboardStats> => {
     const { data } = await apiClient.get('/dashboard/exam-stats', { params: { classId } });
     return data;
   },
 
-  getInventoryStats: async (): Promise<any> => {
+  getInventoryStats: async (): Promise<InventoryDashboardStats> => {
     const { data } = await apiClient.get('/dashboard/inventory-stats');
     return data;
   },
 
-  getNotificationStats: async (): Promise<any> => {
+  getNotificationStats: async (): Promise<NotificationDashboardStats> => {
     const { data } = await apiClient.get('/notifications/dashboard');
     return data;
   },

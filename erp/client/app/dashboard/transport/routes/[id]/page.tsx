@@ -31,7 +31,7 @@ export default function RouteDetailsPage() {
       try {
         setIsLoading(true);
         const res = await transportAPI.getRouteById(id as string);
-        if (res.data?.success) setRoute(res.data.route);
+        if (res.success) setRoute(res.route);
       } catch (err: any) {
         toast.error('Network trace failed.');
       } finally {

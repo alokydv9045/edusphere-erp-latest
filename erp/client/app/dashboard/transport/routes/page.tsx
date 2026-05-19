@@ -45,8 +45,8 @@ export default function RoutesPage() {
         transportAPI.getRoutes(),
         transportAPI.getStats()
       ]);
-      if (rRes.data?.success) setRoutes(rRes.data.routes);
-      if (sRes.data?.success) setStats(sRes.data.stats);
+      if (rRes.success) setRoutes(rRes.routes);
+      if (sRes.success) setStats(sRes.stats);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch transport routes');
     } finally {

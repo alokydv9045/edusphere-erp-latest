@@ -45,3 +45,6 @@ Cortex/
 *.bak
 *.resolved
 *.old
+backups/
+temp_backup/
+

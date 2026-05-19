@@ -45,8 +45,8 @@ export default function VehiclesPage() {
         transportAPI.getVehicles(),
         transportAPI.getStats()
       ]);
-      if (vRes.data?.success) setVehicles(vRes.data.vehicles);
-      if (sRes.data?.success) setStats(sRes.data.stats);
+      if (vRes.success) setVehicles(vRes.vehicles);
+      if (sRes.success) setStats(sRes.stats);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Connection error.');
     } finally {

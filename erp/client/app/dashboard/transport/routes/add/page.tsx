@@ -72,7 +72,7 @@ export default function AddRoutePage() {
       };
       
       const res = await transportAPI.createRoute(payload);
-      if (res.data?.success) {
+      if (res.success) {
         toast.success('Route network created!');
         router.push('/dashboard/transport/routes');
       }

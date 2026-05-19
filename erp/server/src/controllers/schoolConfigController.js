@@ -1,36 +1,19 @@
 const prisma = require('../config/database');
-const multer = require('multer');
+const { createUploader } = require('../utils/fileUpload');
 const path = require('path');
 const fs = require('fs');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../config/logger');
 
-// Configure multer for logo uploads
 const logoDir = path.join(__dirname, '../../uploads/logo');
 if (!fs.existsSync(logoDir)) {
     fs.mkdirSync(logoDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, logoDir),
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `school_logo_${Date.now()}${ext}`);
-    },
-});
-
-const upload = multer({
-    storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-    fileFilter: (req, file, cb) => {
-        const allowed = ['.png', '.jpg', '.jpeg', '.svg', '.webp'];
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (allowed.includes(ext)) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only PNG, JPG, SVG, and WebP images are allowed'));
-        }
-    },
+const upload = createUploader({
+    folder: 'logo',
+    type: 'image',
+    maxSizeBytes: 5 * 1024 * 1024, // 5MB
 }).single('logo');
 
 /**

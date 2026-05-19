@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,10 +22,14 @@ import { dashboardAPI, type DashboardStats, type RecentActivity, type UpcomingEx
 import { useAuth } from '@/contexts/auth-context';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useSocket } from '@/hooks/useSocket';
-import { RealtimeChart } from '@/components/dashboard/RealtimeChart';
-import { CalendarWidget } from '@/components/dashboard/CalendarWidget';
-import { UpcomingEvents } from '@/components/dashboard/UpcomingEvents';
 import { StatsSkeleton, ChartSkeleton, TableSkeleton } from '@/components/dashboard/SkeletonLoaders';
+
+// ─── Code-Split Heavy Components ───────────────────────────────────────────
+const RealtimeChart = dynamic(() => import('@/components/dashboard/RealtimeChart').then(mod => mod.RealtimeChart), { 
+  loading: () => <ChartSkeleton /> 
+});
+const CalendarWidget = dynamic(() => import('@/components/dashboard/CalendarWidget').then(mod => mod.CalendarWidget), { ssr: false });
+const UpcomingEvents = dynamic(() => import('@/components/dashboard/UpcomingEvents').then(mod => mod.UpcomingEvents), { ssr: false });
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 function formatINR(amount: number): string {
@@ -120,13 +125,22 @@ export default function DashboardPage() {
     loadDashboard();
   }, [role, socket]);
 
+  // ── Debounced socket handler to prevent request storms ─────────────────
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const debouncedLoadDashboard = useCallback(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      loadDashboard();
+    }, 1000);
+  }, [role]);
+
   useEffect(() => {
     if (socket && role) {
       socket.emit('join_dashboard', role);
       if (isTeacher && stats.myClassId) socket.emit('join_room', `class_${stats.myClassId}`);
       if (isStudent && stats.studentId) socket.emit('join_room', `student_${stats.studentId}`);
 
-      const handleUpdate = () => loadDashboard();
+      const handleUpdate = () => debouncedLoadDashboard();
       socket.on('ATTENDANCE_MARKED', handleUpdate);
       socket.on('STUDENT_REGISTERED', handleUpdate);
       socket.on('FINANCE_UPDATE', handleUpdate);
@@ -138,6 +152,7 @@ export default function DashboardPage() {
       socket.on('ANNOUNCEMENT_CREATED', handleUpdate);
 
       return () => {
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
         socket.off('ATTENDANCE_MARKED', handleUpdate);
         socket.off('STUDENT_REGISTERED', handleUpdate);
         socket.off('FINANCE_UPDATE', handleUpdate);
@@ -149,7 +164,7 @@ export default function DashboardPage() {
         socket.off('ANNOUNCEMENT_CREATED', handleUpdate);
       };
     }
-  }, [role, socket, stats.myClassId, stats.studentId, isTeacher, isStudent]);
+  }, [role, socket, isTeacher, isStudent, debouncedLoadDashboard]);
 
   if (isLoading) {
     return (
@@ -555,46 +570,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          NOTIFICATION STATS WIDGET (Admin / Super Admin)
-          ══════════════════════════════════════════════════════════════════════ */}
-      {isAdminOrPrincipal && notifStats && (
-        <Card className="border-l-4 border-l-violet-500">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                <BellRing className="h-4 w-4 text-violet-600" /> Notification Overview
-              </CardTitle>
-              <CardDescription>WhatsApp notification delivery stats</CardDescription>
-            </div>
-            <Link href="/dashboard/notifications">
-              <Button variant="ghost" size="sm" className="gap-1 text-xs text-violet-600 hover:text-violet-700">
-                Manage <ArrowRight className="h-3 w-3" />
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-2xl font-bold text-green-600">{notifStats.sentToday}</span>
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sent Today</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-2xl font-bold text-blue-600">{notifStats.scheduledCount}</span>
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Scheduled</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-2xl font-bold text-orange-600">{notifStats.pendingCount}</span>
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Send className="h-3 w-3" /> Pending</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-2xl font-bold text-red-600">{notifStats.failedCount}</span>
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><XCircle className="h-3 w-3" /> Failed</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           SECTION 3: Accountant Quick Actions

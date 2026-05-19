@@ -17,6 +17,18 @@ class FeeRepository {
         });
     }
 
+    async findFeeStructuresPaginated(where, include = { items: true }, skip, take) {
+        const structures = await prisma.feeStructure.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            include,
+            skip,
+            take,
+        });
+        const total = await prisma.feeStructure.count({ where });
+        return [structures, total];
+    }
+
     /**
      * Get students with their fee ledger status for the fee management listing
      */
@@ -562,6 +574,19 @@ class FeeRepository {
                 paymentDate: { gte: start, lte: end },
             },
             _sum: { amount: true },
+        });
+    }
+
+    /**
+     * Get payments in date range for batch aggregation
+     */
+    async getPaymentsInRange(start, end) {
+        return prisma.feePayment.findMany({
+            where: {
+                status: 'COMPLETED',
+                paymentDate: { gte: start, lte: end },
+            },
+            select: { amount: true, paymentDate: true },
         });
     }
 }

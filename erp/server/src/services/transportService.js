@@ -496,6 +496,22 @@ class TransportService {
         return null;
     }
 
+    async getDrivers() {
+        return prisma.staff.findMany({
+            where: {
+                OR: [
+                    { user: { role: 'DRIVER' } },
+                    { department: { contains: 'Transport', mode: 'insensitive' } },
+                    { designation: { contains: 'Driver', mode: 'insensitive' } }
+                ],
+                status: 'ACTIVE'
+            },
+            include: {
+                user: { select: { firstName: true, lastName: true, phone: true, email: true } }
+            }
+        });
+    }
+
     async getDriverAssignment(userId) {
         const staff = await prisma.staff.findUnique({
             where: { userId },

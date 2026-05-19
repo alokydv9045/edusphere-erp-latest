@@ -189,7 +189,7 @@ module.exports = {
     
     // If id is 'me', use the authenticated student's ID
     if (id === 'me' && req.user.role === 'STUDENT') {
-      const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
+      const student = await prisma.student.findFirst({ where: { userId: req.user.userId } });
       if (!student) return res.status(404).json({ success: false, message: 'Student profile not found' });
       id = student.id;
     }

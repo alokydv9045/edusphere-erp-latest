@@ -37,10 +37,12 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     try {
       setIsLoading(true);
       const data = await studentAPI.getById(id);
-      setStudent(data.student);
-      fetchDocuments(id);
-      if (data.student.sectionId) {
-        fetchTimetable(data.student.sectionId);
+      if (data?.student) {
+        setStudent(data.student);
+        fetchDocuments(id);
+        if (data.student.sectionId) {
+          fetchTimetable(data.student.sectionId);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch student details');

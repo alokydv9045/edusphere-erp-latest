@@ -57,10 +57,10 @@ export default function ClassesPage() {
                 academicAPI.getAcademicYears()
             ]);
             setClasses(classesResponse.classes || []);
-            setAcademicYears(yearsResponse.years || []);
+            setAcademicYears(yearsResponse.academicYears || []);
 
             // Select current year by default if one exists
-            const currentYear = yearsResponse.years?.find((y: any) => y.isCurrent);
+            const currentYear = yearsResponse.academicYears?.find((y: any) => y.isCurrent);
             if (currentYear && !classForm.academicYearId) {
                 setClassForm(prev => ({ ...prev, academicYearId: currentYear.id }));
             }

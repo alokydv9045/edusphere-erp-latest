@@ -46,12 +46,12 @@ export default function AllocationsPage() {
         transportAPI.getStats()
       ]);
       
-      if (aRes.data?.success) {
-        setAllocations(aRes.data.allocations || []);
+      if (aRes.success) {
+        setAllocations(aRes.allocations || []);
       }
       
-      if (sRes.data?.success) {
-        setStats(sRes.data.stats);
+      if (sRes.success) {
+        setStats(sRes.stats);
       }
     } catch (err: any) {
       setError('Connection failure. Data synchronization interrupted.');

@@ -45,7 +45,7 @@ export default function NewAllocationPage() {
     const fetchRoutes = async () => {
       try {
         const res = await transportAPI.getRoutes();
-        if (res.data?.success) setRoutes(res.data.routes);
+        if (res.success) setRoutes(res.routes);
       } catch (err) {
         console.error('Failed to sync routes');
       }
@@ -99,7 +99,7 @@ export default function NewAllocationPage() {
     try {
       setIsLoading(true);
       const res = await transportAPI.assignStudent(formData);
-      if (res.data?.success) {
+      if (res.success) {
         toast.success('Student allocated successfully!');
         router.push('/dashboard/transport/allocations');
       }

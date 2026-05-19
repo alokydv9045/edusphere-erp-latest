@@ -1,15 +1,16 @@
 const prisma = require('../config/database');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
-const multer = require('multer');
+const { createUploader } = require('../utils/fileUpload');
 const path = require('path');
 const fs = require('fs');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../config/logger');
 
-// Configure multer for temporary storage before Cloudinary upload
-const upload = multer({
-    dest: 'uploads/temp/',
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+// Configure uploader for temporary storage before Cloudinary upload
+const upload = createUploader({
+    folder: 'temp',
+    type: 'all',
+    maxSizeBytes: 10 * 1024 * 1024, // 10MB
 }).single('file');
 
 /**

@@ -178,7 +178,7 @@ export default function AcademicPage() {
     setIsRefreshingSchedule(true);
     try {
       const res = await timetableAPI.getStudentSchedule(sectionId);
-      setDynamicSchedule(res.schedule || []);
+      setDynamicSchedule(res.slots || []);
     } catch (error) {
       console.error('Failed to fetch dynamic schedule:', error);
     } finally {
@@ -193,7 +193,7 @@ export default function AcademicPage() {
     setIsLoading(true);
     try {
       const configRes = await timetableAPI.getConfig(selectedClassForLogic);
-      const configId = configRes.config?.id;
+      const configId = configRes.config?.id || configRes.data?.id;
       if (!configId) {
         toast.error("Config Missing", { description: "School timings are not configured for this class yet." });
         return;
@@ -323,7 +323,7 @@ export default function AcademicPage() {
         numericValue: classForm.numericValue,
         description: classForm.description,
         academicYearId: classForm.academicYearId,
-        classTeacherId: classForm.classTeacherId || null,
+        classTeacherId: classForm.classTeacherId || undefined,
       };
       if (editingClass) {
         await academicAPI.updateClass(editingClass.id, payload);
@@ -350,7 +350,7 @@ export default function AcademicPage() {
         code: subjectForm.code,
         description: subjectForm.description,
         classId: subjectForm.classId,
-        teacherId: subjectForm.teacherId || null,
+        teacherId: subjectForm.teacherId || undefined,
       };
       if (editingSubject) {
         await academicAPI.updateSubject(editingSubject.id, payload);

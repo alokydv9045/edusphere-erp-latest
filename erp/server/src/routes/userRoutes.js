@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const validate = require('../middleware/validate');
+const { registerSchema, resetPasswordSchema, changePasswordSchema } = require('../validators/userValidator');
 const {
   getAllUsers,
   getUserById,
@@ -22,7 +24,7 @@ const {
 router.use(authMiddleware);
 
 // ── Self-service routes ──
-router.post('/me/change-password', changePassword);
+router.post('/me/change-password', validate(changePasswordSchema), changePassword);
 
 // Get all users (paginated with filters) - Admin only
 router.get('/', requireRole('SUPER_ADMIN', 'ADMIN'), getAllUsers);
@@ -42,7 +44,7 @@ router.post('/:id/qr/status', requireRole('SUPER_ADMIN', 'ADMIN'), toggleQRIssue
 router.get('/:id', getUserById);
 
 // Create new user - Admin only
-router.post('/', requireRole('SUPER_ADMIN', 'ADMIN'), createUser);
+router.post('/', requireRole('SUPER_ADMIN', 'ADMIN'), validate(registerSchema), createUser);
 
 // Update user - Admin only
 router.put('/:id', requireRole('SUPER_ADMIN', 'ADMIN'), updateUser);
@@ -51,7 +53,7 @@ router.put('/:id', requireRole('SUPER_ADMIN', 'ADMIN'), updateUser);
 router.patch('/:id/roles', requireRole('SUPER_ADMIN', 'ADMIN'), updateUserRoles);
 
 // Reset user password - Admin only
-router.post('/:id/reset-password', requireRole('SUPER_ADMIN', 'ADMIN'), resetPassword);
+router.post('/:id/reset-password', requireRole('SUPER_ADMIN', 'ADMIN'), validate(resetPasswordSchema), resetPassword);
 
 // Update profile picture - Anyone for their own account, or Admin for anyone
 router.patch('/:id/avatar', uploadProfilePicture, updateProfilePicture);

@@ -321,14 +321,23 @@ class DashboardRepository {
     }
 
     async getLowStockItems() {
-        const items = await prisma.inventoryItem.findMany({
-            select: { id: true, name: true, quantity: true, minStockLevel: true }
-        });
-        return items.filter(item => item.quantity <= item.minStockLevel);
+        return prisma.$queryRaw`
+            SELECT id, name, quantity, "minStockLevel" 
+            FROM "InventoryItem" 
+            WHERE quantity <= "minStockLevel"
+        `;
     }
 
     // --- Performance & Trends ---
-    async getAttendanceCount(where) {
+    async getAttendanceCount(where, groupByDate = false) {
+        if (groupByDate) {
+            return prisma.attendanceRecord.groupBy({
+                by: ['date'],
+                where,
+                _count: { id: true },
+                orderBy: { date: 'asc' }
+            });
+        }
         return prisma.attendanceRecord.count({ where });
     }
 

@@ -206,4 +206,22 @@ async function processScheduledQueue() {
   }
 }
 
-module.exports = { startQueueWorker, processScheduledQueue };
+async function shutdownNotificationQueue() {
+  if (queueWorker) {
+    await queueWorker.close();
+    console.log('[NotificationQueue] BullMQ worker closed');
+  }
+  if (notifQueue) {
+    await notifQueue.close();
+    console.log('[NotificationQueue] BullMQ queue closed');
+  }
+}
+
+function getQueueStatus() {
+  return {
+    bullmqActive: !!notifQueue,
+    redisUrlConfigured: !!process.env.REDIS_URL
+  };
+}
+
+module.exports = { startQueueWorker, processScheduledQueue, shutdownNotificationQueue, getQueueStatus };

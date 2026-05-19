@@ -38,8 +38,8 @@ export default function TrackBusPage() {
             setIsLoading(true);
             const res = await transportAPI.getActiveTrip();
             
-            if (res.data?.success && res.data.trip) {
-                const tripsData = Array.isArray(res.data.trip) ? res.data.trip : [res.data.trip];
+            if (res.success && res.trip) {
+                const tripsData = Array.isArray(res.trip) ? res.trip : [res.trip];
                 
                 if (tripsData.length === 0) {
                     setActiveTrips([]);

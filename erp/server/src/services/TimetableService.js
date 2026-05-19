@@ -241,6 +241,56 @@ class TimetableService {
         const e = s + duration;
         return t >= s && t < e;
     }
+
+    async getCurrentAcademicYear() {
+        const year = await prisma.academicYear.findFirst({ where: { isCurrent: true } });
+        if (!year) throw new AppError('No active academic year found', 404);
+        return year;
+    }
+
+    async getTeacherSchedule(teacherId) {
+        return prisma.timetableSlot.findMany({
+            where: { teacherId },
+            include: {
+                subject: true,
+                section: { include: { class: true } },
+                room: true
+            },
+            orderBy: [
+                { dayOfWeek: 'asc' },
+                { startTime: 'asc' }
+            ]
+        });
+    }
+
+    async getStudentSchedule(sectionId) {
+        return prisma.timetableSlot.findMany({
+            where: { sectionId },
+            include: {
+                subject: true,
+                teacher: { include: { user: true } },
+                room: true
+            },
+            orderBy: [
+                { dayOfWeek: 'asc' },
+                { startTime: 'asc' }
+            ]
+        });
+    }
+
+    async getRooms() {
+        return prisma.room.findMany({
+            where: { isActive: true },
+            orderBy: { name: 'asc' }
+        });
+    }
+
+    async createRoom(data) {
+        if (!data.name || !data.capacity) {
+            throw new AppError('Room name and capacity are required', 400);
+        }
+        return prisma.room.create({ data });
+    }
 }
 
 module.exports = new TimetableService();

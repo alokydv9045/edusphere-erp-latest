@@ -11,6 +11,7 @@ const errorHandler = (err, req, res, next) => {
     let statusCode = err.statusCode || 500;
     let status = err.status || 'error';
     let message = err.message || 'Something went very wrong! Please contact support.';
+    let errors = err.errors || undefined;
 
     // ── PRISMA ERROR NORMALIZATION ──
     if (err.code) {
@@ -51,21 +52,19 @@ const errorHandler = (err, req, res, next) => {
         message: err.message,
         code: err.code,
         stack: err.stack,
-        statusCode
+        statusCode,
+        errors
     });
 
-    // In development, send detailed error information
+    // In development, send error code/name for debugging but NEVER stack traces
     if (process.env.NODE_ENV === 'development') {
         return res.status(statusCode).json({
             success: false,
             status,
             message,
-            error: {
-                ...err,
-                code: err.code,
-                name: err.name
-            },
-            stack: err.stack
+            errors,
+            errorCode: err.code || undefined,
+            errorName: err.name || undefined
         });
     }
 
@@ -73,9 +72,9 @@ const errorHandler = (err, req, res, next) => {
     return res.status(statusCode).json({
         success: false,
         status,
-        message: err.isOperational ? err.message : message
+        message: err.isOperational ? err.message : message,
+        errors
     });
 };
 
 module.exports = errorHandler;
-

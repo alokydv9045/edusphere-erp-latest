@@ -47,8 +47,8 @@ export default function EditVehiclePage() {
       try {
         setIsLoading(true);
         const res = await transportAPI.getVehicleById(id as string);
-        if (res.data?.success) {
-            const v = res.data.vehicle;
+        if (res.success) {
+            const v = res.vehicle;
             setFormData({
                 name: v.name || '',
                 registrationNumber: v.registrationNumber || '',
@@ -80,7 +80,7 @@ export default function EditVehiclePage() {
           capacity: parseInt(formData.capacity)
       });
       
-      if (res.data?.success) {
+      if (res.success) {
         toast.success('Fleet record updated successfully.');
         router.push(`/dashboard/transport/vehicles/${id}`);
       }

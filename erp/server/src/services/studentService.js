@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const studentRepo = require('../repositories/studentRepository');
 const prisma = require('../config/database');
 const NotFoundError = require('../errors/NotFoundError');
@@ -321,9 +322,9 @@ class StudentService {
     async registerStudent(data, reqUser) {
         // 1. Generate Credentials
         const year = new Date().getFullYear();
-        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+        const randomSuffix = crypto.randomInt(1000, 9999);
         const username = `STD${year}${randomSuffix}`;
-        const passwordRaw = `PASS${Math.floor(100000 + Math.random() * 900000)}`;
+        const passwordRaw = `Edu${crypto.randomBytes(4).toString('hex')}${crypto.randomInt(10, 99)}`;
         const hashedPassword = await bcrypt.hash(passwordRaw, 10);
 
         // 2. Auto-calculate Roll Number

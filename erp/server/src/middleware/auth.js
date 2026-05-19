@@ -1,6 +1,18 @@
 const jwt = require('jsonwebtoken');
+const NodeCache = require('node-cache');
 
 const prisma = require('../config/database');
+
+// ── In-memory user session cache (60s TTL) ──
+// Eliminates a DB roundtrip on every authenticated request
+const userCache = new NodeCache({ stdTTL: 60, checkperiod: 120, useClones: false });
+
+/**
+ * Invalidate a user's cached session (call on logout, role change, deactivation)
+ */
+const invalidateUserCache = (userId) => {
+  userCache.del(`user:${userId}`);
+};
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -25,21 +37,32 @@ const authMiddleware = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // --- Critical: Status Check ---
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: {
-        teacher: { select: { id: true } },
-        student: { select: { id: true } },
-        staff: { select: { id: true } }
+    // --- Cached User Lookup ---
+    const cacheKey = `user:${decoded.userId}`;
+    let user = userCache.get(cacheKey);
+
+    if (!user) {
+      // Cache miss — fetch from DB and cache for 60s
+      user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        include: {
+          teacher: { select: { id: true } },
+          student: { select: { id: true } },
+          staff: { select: { id: true } }
+        }
+      });
+
+      if (user) {
+        userCache.set(cacheKey, user);
       }
-    });
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'User no longer exists' });
     }
 
     if (user.isActive === false) {
+      invalidateUserCache(user.id);
       return res.status(403).json({ error: 'Institutional account is currently deactivated' });
     }
 
@@ -90,4 +113,4 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-module.exports = { authMiddleware, requireRole };
+module.exports = { authMiddleware, requireRole, invalidateUserCache };

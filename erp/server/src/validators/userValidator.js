@@ -24,9 +24,15 @@ const loginSchema = z.object({
     password: z.string().min(1, 'Password is required'),
 });
 
-// Schema for password reset
+// Schema for password reset (Admin resetting user's password)
 const resetPasswordSchema = z.object({
     password: z.string().min(6, 'New password must be at least 6 characters'),
+});
+
+// Schema for self-service password change
+const changePasswordSchema = z.object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z.string().min(6, 'New password must be at least 6 characters'),
 });
 
 // Schema for HR employee creation (extended user)
@@ -53,5 +59,6 @@ module.exports = {
     registerSchema,
     loginSchema,
     resetPasswordSchema,
+    changePasswordSchema,
     hrCreateEmployeeSchema
 };

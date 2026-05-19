@@ -38,7 +38,7 @@ export default function TransportSettingsPage() {
     const fetchSettings = async () => {
         try {
             const res = await transportAPI.getSettings();
-            if (res.data?.success) setSettings(res.data.settings);
+            if (res.success) setSettings(res.settings);
         } catch (err) {
             console.error('Settings fetch error:', err);
         }
@@ -50,7 +50,7 @@ export default function TransportSettingsPage() {
     try {
         setIsSaving(true);
         const res = await transportAPI.updateSettings(settings);
-        if (res.data?.success) {
+        if (res.success) {
             toast.success("Institutional configurations synchronized successfully.");
         }
     } catch (err) {

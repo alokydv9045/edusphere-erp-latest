@@ -1,6 +1,7 @@
 const ExamService = require('../services/ExamService');
 const { emitEvent } = require('../services/socketService');
-const asyncHandler = require('express-async-handler');
+const asyncHandler = require('../utils/asyncHandler');
+const prisma = require('../config/database');
 
 /**
  * Controller for Exam related routes
@@ -109,7 +110,7 @@ const getConsolidatedMarks = asyncHandler(async (req, res) => {
 // Freeze exam
 const freezeExam = asyncHandler(async (req, res) => {
   const { examId } = req.params;
-  const userId = req.user?.id || null;
+  const userId = req.user?.userId || null;
   
   const updated = await ExamService.freezeExam(examId, userId);
   res.status(200).json({ 
@@ -132,17 +133,17 @@ const unfreezeExam = asyncHandler(async (req, res) => {
   });
 });
 
-// Legacy submit exam results
+// Legacy submit exam results — routes to enterMarks service for backward compatibility
 const submitExamResults = asyncHandler(async (req, res) => {
-  // This is kept for backward compatibility but redirected to service logic if needed.
-  // For now, let's keep it as is but wrap in asyncHandler.
-  // Original logic was quite different from enterMarks.
-  // I'll leave it as a placeholder pointing to the service if we ever need to fully migrate it.
-  const result = await ExamService.createExam(req.body); // Roughly similar to creating results
+  const { examId } = req.params;
+  const userId = req.user.userId || req.user.id;
+  const userRole = req.user.role;
+
+  const result = await ExamService.enterMarks(examId, req.body, userId, userRole);
   res.status(201).json({
     success: true,
-    message: 'Exam results submitted successfully',
-    examResult: result,
+    message: `Exam results submitted for ${result.saved} students`,
+    saved: result.saved,
   });
 });
 
@@ -163,6 +164,7 @@ const getStudentExamResults = asyncHandler(async (req, res) => {
     }
   }
 
+  const result = await ExamService.getStudentExamResults(studentId, req.query);
   res.status(200).json({ 
     success: true,
     ...result 
@@ -172,6 +174,7 @@ const getStudentExamResults = asyncHandler(async (req, res) => {
 // Get exam results report
 const getExamResultsReport = asyncHandler(async (req, res) => {
   const { examId } = req.params;
+  const result = await ExamService.getExamResultsReport(examId, req.query);
   res.status(200).json({ 
     success: true,
     ...result 

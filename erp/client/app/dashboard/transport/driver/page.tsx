@@ -51,11 +51,11 @@ export default function DriverDashboard() {
     try {
       setIsLoading(true);
       const res = await transportAPI.getDriverAssignment();
-      if (res.data?.success) {
-        setAssignment(res.data);
-        if (res.data.activeTrip) {
-            setActiveTripId(res.data.activeTrip.id);
-            resumeTracking(res.data.activeTrip.id);
+      if (res.success) {
+        setAssignment(res);
+        if (res.activeTrip) {
+            setActiveTripId(res.activeTrip.id);
+            resumeTracking(res.activeTrip.id);
         }
       }
     } catch (err: any) {
@@ -79,9 +79,9 @@ export default function DriverDashboard() {
         type: 'PICKUP'
       });
 
-      if (res.data?.success) {
-        setActiveTripId(res.data.trip.id);
-        startTracking(res.data.trip.id);
+      if (res.success) {
+        setActiveTripId(res.trip.id);
+        startTracking(res.trip.id);
         toast.success('Route operational. GPS streaming active.');
       }
     } catch (err: any) {
@@ -94,7 +94,7 @@ export default function DriverDashboard() {
 
     try {
       const res = await transportAPI.stopTrip(activeTripId);
-      if (res.data?.success) {
+      if (res.success) {
         setActiveTripId(null);
         if (watchIdRef.current) {
           navigator.geolocation.clearWatch(watchIdRef.current);

@@ -53,6 +53,15 @@ const { initSocket } = require('./src/services/socketService');
 const { initScheduler } = require('./src/config/scheduler');
 const errorHandler = require('./src/middleware/errorHandler');
 
+// Notification scheduler & queue (loaded eagerly so failures are visible at startup)
+let notificationScheduler, notificationQueueWorker;
+try {
+  notificationScheduler = require('./src/notifications/notificationScheduler');
+  notificationQueueWorker = require('./src/notifications/notificationQueue');
+} catch (err) {
+  console.warn('⚠️  Notification modules not available:', err.message);
+}
+
 // Initialize app
 const app = express();
 const server = http.createServer(app);
@@ -102,21 +111,39 @@ const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Logging
+const morganStream = {
+  write: (message) => logger.http(message.trim())
+};
 if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
+  app.use(morgan('dev', { stream: morganStream }));
 } else {
-  app.use(morgan('combined'));
+  app.use(morgan('combined', { stream: morganStream }));
 }
 
-// Rate limiting
-if (process.env.RATE_LIMIT_ENABLED === 'true') {
-  const limiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000,
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 200,
-    message: 'Too many requests from this IP, please try again later.',
-  });
-  app.use('/api/', limiter);
-}
+// Rate limiting — always enabled for security
+const globalLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 200,
+  message: { success: false, error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', globalLimiter);
+
+// Strict rate limiter for auth endpoints (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 900000, // 15 minutes
+  max: 10, // 10 login attempts per 15 min
+  message: { success: false, error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', authLimiter);
+
+// SEC-6: CSRF Protection (only enforced in production)
+const { generateCsrfToken, validateCsrf } = require('./src/middleware/csrf');
+app.get('/api/csrf-token', generateCsrfToken);
+app.use('/api/', validateCsrf);
 
 // Welcome route
 app.get('/', (req, res) => {
@@ -128,48 +155,77 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
+const prisma = require('./src/config/database');
+const { getQueueStatus, shutdownNotificationQueue } = require('./src/notifications/notificationQueue');
+
+// Deep Health Check
+const healthCheckHandler = async (req, res) => {
+  const dbHealth = await prisma.checkDatabaseHealth();
+  const queueStatus = getQueueStatus();
+  const memoryUsage = process.memoryUsage();
+
+  const isHealthy = dbHealth.status === 'up';
+
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'OK' : 'DEGRADED',
     service: 'EduSphere School ERP',
     schoolId: process.env.SCHOOL_ID,
     schoolName: process.env.SCHOOL_NAME,
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
+    uptimeSeconds: process.uptime(),
+    components: {
+      database: dbHealth,
+      queue: queueStatus,
+    },
+    system: {
+      memoryUsageMb: {
+        rss: Math.round(memoryUsage.rss / 1024 / 1024),
+        heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+        heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+      }
+    }
   });
-});
+};
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/teachers', teacherRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/academic', academicRoutes);
-app.use('/api/fees', feeRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/library', libraryRoutes);
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/services', serviceRoutes);
-app.use('/api/hr', hrRoutes);
-app.use('/api/payroll', payrollRoutes);
-app.use('/api/terms', termRoutes);
-app.use('/api/grade-scales', gradeScaleRoutes);
-app.use('/api/report-cards', reportCardRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/school-config', schoolConfigRoutes);
-app.use('/api/enquiries', enquiryRoutes);
-app.use('/api/scanners', scannerRoutes);
-app.use('/api/assignments', assignmentRoutes);
-app.use('/api/transport', transportRoutes);
-app.use('/api/calendar', calendarRoutes);
-app.use('/api/timetables', timetableRoutes);
-app.use('/api/admin/backups', backupRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.get('/health', healthCheckHandler);
+app.get('/api/health', healthCheckHandler);
+
+// API Version 1 Router
+const v1Router = express.Router();
+v1Router.use('/auth', authRoutes);
+v1Router.use('/students', studentRoutes);
+v1Router.use('/teachers', teacherRoutes);
+v1Router.use('/attendance', attendanceRoutes);
+v1Router.use('/academic', academicRoutes);
+v1Router.use('/fees', feeRoutes);
+v1Router.use('/exams', examRoutes);
+v1Router.use('/library', libraryRoutes);
+v1Router.use('/inventory', inventoryRoutes);
+v1Router.use('/announcements', announcementRoutes);
+v1Router.use('/dashboard', dashboardRoutes);
+v1Router.use('/users', userRoutes);
+v1Router.use('/services', serviceRoutes);
+v1Router.use('/hr', hrRoutes);
+v1Router.use('/payroll', payrollRoutes);
+v1Router.use('/terms', termRoutes);
+v1Router.use('/grade-scales', gradeScaleRoutes);
+v1Router.use('/report-cards', reportCardRoutes);
+v1Router.use('/payments', paymentRoutes);
+v1Router.use('/school-config', schoolConfigRoutes);
+v1Router.use('/enquiries', enquiryRoutes);
+v1Router.use('/scanners', scannerRoutes);
+v1Router.use('/assignments', assignmentRoutes);
+v1Router.use('/transport', transportRoutes);
+v1Router.use('/calendar', calendarRoutes);
+v1Router.use('/timetables', timetableRoutes);
+v1Router.use('/admin/backups', backupRoutes);
+v1Router.use('/ai', aiRoutes);
+v1Router.use('/notifications', notificationRoutes);
+
+// Mount versioned API and legacy fallback
+app.use('/api/v1', v1Router);
+app.use('/api', v1Router);
 
 // 404 handler
 app.use((req, res) => {
@@ -190,13 +246,36 @@ server.listen(PORT, () => {
   initScheduler();
 
   // Start notification scheduler and queue worker
-  try {
-    const { startScheduler } = require('./src/notifications/notificationScheduler');
-    const { startQueueWorker } = require('./src/notifications/notificationQueue');
-    startQueueWorker();
-    startScheduler();
+  if (notificationScheduler && notificationQueueWorker) {
+    notificationQueueWorker.startQueueWorker();
+    notificationScheduler.startScheduler();
     logger.info('🔔 Notification scheduler & queue worker started');
-  } catch (err) {
-    logger.warn('⚠️  Notification scheduler could not start (install bullmq + node-cron):', err.message);
   }
 });
+
+// Graceful shutdown handling
+const gracefulShutdown = async (signal) => {
+  logger.info(`🛑 Received ${signal}. Starting graceful shutdown...`);
+
+  server.close(async () => {
+    logger.info('HTTP server closed.');
+    try {
+      await shutdownNotificationQueue();
+      await prisma.$disconnect();
+      logger.info('Database and queues disconnected successfully.');
+      process.exit(0);
+    } catch (err) {
+      logger.error('Error during graceful shutdown:', err);
+      process.exit(1);
+    }
+  });
+
+  // Force shutdown after 10s if graceful fails
+  setTimeout(() => {
+    logger.error('🚨 Graceful shutdown timed out. Forcing process exit.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

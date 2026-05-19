@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const prisma = require('../config/database');
 const asyncHandler = require('../utils/asyncHandler');
 const { validateAndNormalizeRoles } = require('../utils/userUtils');
@@ -13,33 +14,48 @@ const generateToken = (user) => {
       roles: (user.roles && user.roles.length > 0) ? user.roles : [user.role],
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
   );
 };
 
-const setAuthCookie = (res, token) => {
+const generateRefreshToken = async (userId) => {
+  const token = crypto.randomBytes(40).toString('hex');
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  await prisma.refreshToken.create({
+    data: {
+      token,
+      userId,
+      expiresAt,
+    },
+  });
+
+  return token;
+};
+
+const setAuthCookies = (res, accessToken, refreshToken) => {
   const isProduction = process.env.NODE_ENV === 'production';
-  const cookieOptions = {
+  const cookieOptions = (maxAge) => ({
     httpOnly: true,
     secure: isProduction,
-    // On Render, client and API are on different subdomains. 
-    // sameSite: 'none' is required for cross-domain cookies to work with credentials.
     sameSite: isProduction ? 'none' : 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge,
     path: '/',
-  };
-  res.cookie('auth_token', token, cookieOptions);
+  });
+
+  res.cookie('auth_token', accessToken, cookieOptions(15 * 60 * 1000)); // 15 mins
+  if (refreshToken) {
+    res.cookie('refresh_token', refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000)); // 7 days
+  }
 };
 
 const register = asyncHandler(async (req, res) => {
   const { email, password, firstName, lastName, role, roles: rolesFromBody, phone } = req.body;
 
-  // Validate input
   if (!email || !password || !firstName || !lastName || !role) {
     return res.status(400).json({ error: 'All fields are required' });
   }
 
-  // Use centralized role validation & normalization
   const roleCheck = validateAndNormalizeRoles(rolesFromBody || [role], role);
   if (!roleCheck.valid) {
     return res.status(400).json({ error: roleCheck.message });
@@ -47,7 +63,6 @@ const register = asyncHandler(async (req, res) => {
 
   const { roles: rolesArray } = roleCheck;
 
-  // Check if user exists
   const existingUser = await prisma.user.findUnique({
     where: { email },
   });
@@ -56,10 +71,8 @@ const register = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'User already exists with this email' });
   }
 
-  // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Create user with merged roles array
   const user = await prisma.user.create({
     data: {
       email,
@@ -72,13 +85,14 @@ const register = asyncHandler(async (req, res) => {
     },
   });
 
-  // Generate token
-  const token = generateToken(user);
-  setAuthCookie(res, token);
+  const accessToken = generateToken(user);
+  const refreshTokenStr = await generateRefreshToken(user.id);
+  setAuthCookies(res, accessToken, refreshTokenStr);
 
   res.status(201).json({
     success: true,
     message: 'User registered successfully',
+    token: accessToken,
     user: {
       id: user.id,
       email: user.email,
@@ -93,12 +107,10 @@ const register = asyncHandler(async (req, res) => {
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // Validate input
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
-  // Find user with Student relationship and parent linkages
   const user = await prisma.user.findUnique({
     where: { email },
     include: {
@@ -116,35 +128,24 @@ const login = asyncHandler(async (req, res) => {
     }
   });
 
-  if (!user) {
+  if (!user || !user.isActive) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  // Check if user is active
-  if (!user.isActive) {
-    return res.status(403).json({ error: 'Account is disabled' });
-  }
-
-  // Verify password
   const validPassword = await bcrypt.compare(password, user.password);
 
   if (!validPassword) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  // SINGLE IDENTITY: Student + Parent share same credentials
-  // If user is a Student with linked parents, they get PARENT role access
   let effectiveRoles = user.roles || [user.role];
   const parentAccess = [];
 
-  // Check if this student has parent relationships
   if (user.student && user.student.parents && user.student.parents.length > 0) {
-    // Grant PARENT role for parent access
     if (!effectiveRoles.includes('PARENT')) {
       effectiveRoles = [...effectiveRoles, 'PARENT'];
     }
 
-    // Store parent info for display
     user.student.parents.forEach(sp => {
       parentAccess.push({
         id: sp.parent.id,
@@ -156,22 +157,20 @@ const login = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update last login
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLogin: new Date() },
   });
 
-  // Generate token with effective roles
-  const token = generateToken({
-    ...user,
-    roles: effectiveRoles
-  });
-  setAuthCookie(res, token);
+  const userForToken = { ...user, roles: effectiveRoles };
+  const accessToken = generateToken(userForToken);
+  const refreshTokenStr = await generateRefreshToken(user.id);
+  setAuthCookies(res, accessToken, refreshTokenStr);
 
   res.status(200).json({
     success: true,
     message: 'Login successful',
+    token: accessToken,
     user: {
       id: user.id,
       email: user.email,
@@ -181,7 +180,6 @@ const login = asyncHandler(async (req, res) => {
       roles: effectiveRoles,
       teacher: user.teacher,
       staff: user.staff,
-      // Include parent access info if applicable
       ...(parentAccess.length > 0 && {
         parentAccess,
         credentialSharing: {
@@ -193,14 +191,72 @@ const login = asyncHandler(async (req, res) => {
   });
 });
 
+const refreshToken = asyncHandler(async (req, res) => {
+  const tokenStr = req.cookies.refresh_token || req.body.refreshToken;
+
+  if (!tokenStr) {
+    return res.status(401).json({ error: 'Refresh token required' });
+  }
+
+  const existingToken = await prisma.refreshToken.findUnique({
+    where: { token: tokenStr },
+    include: { user: true }
+  });
+
+  if (!existingToken) {
+    return res.status(401).json({ error: 'Invalid refresh token' });
+  }
+
+  if (existingToken.revoked) {
+    await prisma.refreshToken.updateMany({
+      where: { userId: existingToken.userId },
+      data: { revoked: true }
+    });
+    return res.status(401).json({ error: 'Security alert: Invalid token reuse detected. All sessions revoked. Please log in again.' });
+  }
+
+  if (new Date() > existingToken.expiresAt) {
+    return res.status(401).json({ error: 'Refresh token expired. Please log in again.' });
+  }
+
+  await prisma.refreshToken.update({
+    where: { id: existingToken.id },
+    data: { revoked: true }
+  });
+
+  if (!existingToken.user.isActive) {
+    return res.status(403).json({ error: 'Account is disabled' });
+  }
+
+  const newAccessToken = generateToken(existingToken.user);
+  const newRefreshToken = await generateRefreshToken(existingToken.user.id);
+
+  setAuthCookies(res, newAccessToken, newRefreshToken);
+
+  res.status(200).json({
+    success: true,
+    token: newAccessToken
+  });
+});
+
 const logout = asyncHandler(async (req, res) => {
+  const tokenStr = req.cookies.refresh_token || req.body.refreshToken;
+  if (tokenStr) {
+    await prisma.refreshToken.updateMany({
+      where: { token: tokenStr },
+      data: { revoked: true }
+    });
+  }
+
   const isProduction = process.env.NODE_ENV === 'production';
-  res.clearCookie('auth_token', {
+  const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? 'none' : 'lax',
     path: '/',
-  });
+  };
+  res.clearCookie('auth_token', cookieOptions);
+  res.clearCookie('refresh_token', cookieOptions);
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 
@@ -213,7 +269,7 @@ const getMe = asyncHandler(async (req, res) => {
       firstName: true,
       lastName: true,
       role: true,
-      roles: true, // Include all roles
+      roles: true,
       phone: true,
       avatar: true,
       isActive: true,
@@ -228,7 +284,6 @@ const getMe = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
-  // Ensure roles field exists for backward compatibility
   const userWithRoles = {
     ...user,
     roles: (user.roles && user.roles.length > 0) ? user.roles : [user.role]
@@ -240,4 +295,4 @@ const getMe = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { register, login, getMe, logout };
+module.exports = { register, login, refreshToken, getMe, logout };
