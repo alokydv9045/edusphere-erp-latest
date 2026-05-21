@@ -8,10 +8,16 @@ const logger = require('../../config/logger');
  */
 class AiService {
   constructor() {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    // Standardizing on gemini-1.5-flash for performance and stability
     this.modelName = "gemini-3-flash-preview";
-    this.model = this.genAI.getGenerativeModel({ model: this.modelName });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      this.genAI = new GoogleGenerativeAI(apiKey);
+      this.model = this.genAI.getGenerativeModel({ model: this.modelName });
+    } else {
+      logger.warn("WARNING: GEMINI_API_KEY is not set. AI services will not work.");
+      this.genAI = null;
+      this.model = null;
+    }
   }
 
   /**
@@ -24,6 +30,10 @@ class AiService {
     // Safety check: Only Students/Teachers allowed
     if (!['STUDENT', 'TEACHER'].includes(role)) {
       return "Hello! I am the EduSphere AI Academic Assistant.";
+    }
+
+    if (!this.model) {
+      return `Hello ${user.firstName || 'there'}! Ready to tackle the academic day?`;
     }
 
     const prompt = `You are the EduSphere AI Academic Assistant. Greet ${name}, who is a ${role.toLowerCase()}. 
@@ -45,6 +55,10 @@ class AiService {
     // 1. Role Authorization
     if (!['STUDENT', 'TEACHER'].includes(user.role)) {
       return "I'm sorry, I am currently configured to assist only Students and Teachers.";
+    }
+
+    if (!this.genAI) {
+      return `I apologize, ${user.firstName || 'Teacher'}. The AI Assistant is currently not configured. Please contact the administrator.`;
     }
 
     // 2. Fetch Deep Context
@@ -191,6 +205,9 @@ class AiService {
     `;
 
     try {
+      if (!this.genAI) {
+        throw new Error('AI Service is not configured. GEMINI_API_KEY is missing.');
+      }
       const model = this.genAI.getGenerativeModel({ model: this.modelName });
       const result = await model.generateContent(prompt);
       return result.response.text();
